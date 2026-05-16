@@ -13,7 +13,6 @@ Polymorphic file and media management for Laravel. Attach images, PDFs, and any 
 - Download files from remote URLs or base64 strings
 - MD5 deduplication for idempotent imports
 - CDN and presigned URL support
-- No dependency on `jurager/eav` — works standalone
 
 ## Requirements
 
