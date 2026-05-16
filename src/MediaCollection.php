@@ -8,6 +8,7 @@ class MediaCollection
     protected array $allowedMimeTypes = [];
     protected int $maxFileSizeInBytes = 0;
     protected ?string $disk = null;
+    protected bool $performConversions = true;
 
     public function __construct(public readonly string $name) {}
 
@@ -55,6 +56,17 @@ class MediaCollection
         return $this;
     }
 
+    /**
+     * Disable automatic conversion dispatch for this collection.
+     * Use for non-image collections (PDFs, documents) to avoid dispatching jobs that will immediately return.
+     */
+    public function withoutConversions(): static
+    {
+        $this->performConversions = false;
+
+        return $this;
+    }
+
     public function isSingleFile(): bool { return $this->singleFile; }
 
     public function getAllowedMimeTypes(): array { return $this->allowedMimeTypes; }
@@ -62,4 +74,6 @@ class MediaCollection
     public function getMaxFileSize(): int { return $this->maxFileSizeInBytes; }
 
     public function getDisk(): ?string { return $this->disk; }
+
+    public function shouldPerformConversions(): bool { return $this->performConversions; }
 }

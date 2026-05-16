@@ -25,6 +25,12 @@ class PerformConversionsJob implements ShouldQueue, ShouldBeUnique
     public int $tries = 3;
 
     /**
+     * Silently discard the job when the Media record was deleted before this job ran.
+     * Without this flag SerializesModels would throw ModelNotFoundException and mark the job as failed.
+     */
+    public bool $deleteWhenMissingModels = true;
+
+    /**
      * @param  Media  $media
      * @param  Conversion[]  $conversions
      */
@@ -66,16 +72,19 @@ class PerformConversionsJob implements ShouldQueue, ShouldBeUnique
         $generator = app(config('media.path_generator', PathGenerator::class));
 
         $originalPath = $generator->getPath($this->media) . $this->media->file_name;
-        $fileContent = Storage::disk($this->media->disk)->get($originalPath);
+        $stream = Storage::disk($this->media->disk)->readStream($originalPath);
 
-        if ($fileContent === null) {
+        if ($stream === null) {
             return;
         }
 
         $tmpFile = tempnam(sys_get_temp_dir(), 'jurager_media_conv_');
 
         try {
-            file_put_contents($tmpFile, $fileContent);
+            $dest = fopen($tmpFile, 'wb');
+            stream_copy_to_stream($stream, $dest);
+            fclose($dest);
+            fclose($stream);
 
             $manager = $this->buildImageManager();
 

@@ -283,6 +283,15 @@ class FileAdder
             return;
         }
 
+        // Skip if the collection explicitly opted out of conversions
+        $collectionDef = method_exists($this->subject, 'getMediaCollection')
+            ? $this->subject->getMediaCollection($this->collection)
+            : null;
+
+        if ($collectionDef && ! $collectionDef->shouldPerformConversions()) {
+            return;
+        }
+
         $all = array_filter(
             $this->subject->getRegisteredMediaConversions(),
             fn ($c) => $c->shouldBePerformedOn($this->collection),

@@ -80,6 +80,20 @@ public function registerMediaCollections(): void
 
 Each disk must be configured in `config/filesystems.php`. Conversions are stored on the same disk as the original.
 
+### Disable conversions for a collection
+
+Non-image collections (PDFs, documents) don't need image conversion jobs. Mark them explicitly to avoid dispatching a job that would immediately return:
+
+```php
+$this->addMediaCollection('documents')
+    ->acceptsMimeTypes(['application/pdf'])
+    ->withoutConversions();
+```
+
+Without this flag, uploading a PDF still dispatches `PerformConversionsJob` which checks `$media->isImage()` and exits — harmless, but wasteful.
+
+---
+
 ## Clearing a collection
 
 ```php

@@ -2,9 +2,11 @@
 
 namespace Jurager\Media;
 
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Jurager\Media\Console\Commands\MediaCleanCommand;
 use Jurager\Media\Console\Commands\MediaRegenerateCommand;
+use Jurager\Media\Models\Media;
 
 class MediaServiceProvider extends ServiceProvider
 {
@@ -16,6 +18,8 @@ class MediaServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+
+        Route::model('media', config('media.models.media', Media::class));
 
         if ($this->app->runningInConsole()) {
             $this->publishes([

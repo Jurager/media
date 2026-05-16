@@ -3,6 +3,7 @@
 namespace Jurager\Media\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Jurager\Media\Models\Media;
 
 class MediaCleanCommand extends Command
@@ -35,7 +36,8 @@ class MediaCleanCommand extends Command
                     $ids = $group->pluck('mediable_id')->unique();
 
                     // Include soft-deleted records so we don't treat them as orphans
-                    $query = method_exists($type, 'withTrashed')
+                    $usesSoftDeletes = in_array(SoftDeletes::class, class_uses_recursive($type), true);
+                    $query = $usesSoftDeletes
                         ? $type::withTrashed()->whereIn('id', $ids)
                         : $type::query()->whereIn('id', $ids);
 

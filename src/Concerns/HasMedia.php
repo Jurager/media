@@ -4,6 +4,7 @@ namespace Jurager\Media\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -45,7 +46,7 @@ trait HasMedia
 
             // For models using SoftDeletes, only clean up on permanent (force) deletion.
             // Soft-deleting a product should not remove its images.
-            if (method_exists($model, 'isForceDeleting') && ! $model->isForceDeleting()) {
+            if (in_array(SoftDeletes::class, class_uses_recursive($model), true) && ! $model->isForceDeleting()) {
                 return;
             }
 
