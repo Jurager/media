@@ -1,0 +1,50 @@
+{
+    "name": "jurager/media",
+    "description": "File and media management for Laravel with S3, image conversions, and polymorphic model attachment",
+    "keywords": ["laravel", "media", "s3", "image", "gallery", "file", "upload"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Yuri Gerassimov",
+            "email": "jurager01@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.4",
+        "illuminate/contracts": "^11.0|^12.0|^13.0",
+        "illuminate/database": "^11.0|^12.0|^13.0",
+        "illuminate/filesystem": "^11.0|^12.0|^13.0",
+        "illuminate/http": "^11.0|^12.0|^13.0",
+        "illuminate/queue": "^11.0|^12.0|^13.0",
+        "illuminate/support": "^11.0|^12.0|^13.0",
+        "intervention/image": "^3.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^9.0|^10.0",
+        "phpunit/phpunit": "^11.0|^12.0",
+        "laravel/pint": "^1.0"
+    },
+    "suggest": {
+        "ext-gd": "Required for GD image driver (default)",
+        "ext-imagick": "Alternative to GD, better quality for image processing"
+    },
+    "autoload": {
+        "psr-4": {
+            "Jurager\\Media\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Jurager\\Media\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Jurager\\Media\\MediaServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
