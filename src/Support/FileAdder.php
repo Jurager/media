@@ -3,7 +3,6 @@
 namespace Jurager\Media\Support;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -12,6 +11,7 @@ use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Jurager\Media\Jobs\PerformConversionsJob;
 use Jurager\Media\Models\Media;
+use Jurager\Media\Models\MediaConversion;
 use RuntimeException;
 
 class FileAdder
@@ -28,8 +28,6 @@ class FileAdder
     protected string $collection = 'default';
     protected string $customName = '';
     protected string $customFileName = '';
-    protected array $customProperties = [];
-
     protected bool $preservingOriginal = false;
 
     /** Temp files created during processing; all cleaned up after upload. */
@@ -63,10 +61,6 @@ class FileAdder
         return $this;
     }
 
-    /**
-     * Source is a file already stored on a Laravel disk (e.g. S3).
-     * The file is streamed to a temp location for processing.
-     */
     public function setFileFromDisk(string $path, string $disk): static
     {
         $this->file = $path;
@@ -90,17 +84,6 @@ class FileAdder
         return $this;
     }
 
-    public function withCustomProperties(array $properties): static
-    {
-        $this->customProperties = $properties;
-
-        return $this;
-    }
-
-    /**
-     * When the source is a local file path, copy it instead of reading in-place.
-     * Useful when you need the original to remain untouched after upload.
-     */
     public function preservingOriginal(): static
     {
         $this->preservingOriginal = true;
@@ -150,7 +133,7 @@ class FileAdder
         $sourcePath = $this->resolveSourcePath();
 
         $processor = new ImageProcessor;
-        $uploadPath = $processor->process($sourcePath, $this->customProperties);
+        [$uploadPath, $properties] = $processor->process($sourcePath);
 
         if ($uploadPath !== $sourcePath) {
             $this->tempFiles[] = $uploadPath;
@@ -178,11 +161,6 @@ class FileAdder
 
         $disk = $collectionDef?->getDisk() ?? config('media.disk', 's3');
 
-        // Per-collection conversions disk takes priority over the global config
-        $conversionsDisk = $collectionDef?->getConversionsDisk()
-            ?? config('media.conversions_disk')
-            ?? $disk;
-
         /** @var PathGenerator $generator */
         $generator = app(config('media.path_generator', PathGenerator::class));
 
@@ -198,12 +176,10 @@ class FileAdder
         $media->file_name = $safeFileName;
         $media->mime_type = $mimeType;
         $media->disk = $disk;
-        $media->conversions_disk = $conversionsDisk;
-        $media->hash = $hash;
         $media->size = $size;
+        $media->hash = $hash;
         $media->order_column = $this->getNextOrderColumn();
-        $media->custom_properties = $this->customProperties ?: null;
-        $media->generated_conversions = [];
+        $media->properties = $properties ?: null;
         $media->save();
 
         $handle = fopen($uploadPath, 'rb');
@@ -217,7 +193,7 @@ class FileAdder
             fclose($handle);
         }
 
-        $this->dispatchConversions($media);
+        $this->dispatchConversions($media, $collectionDef);
 
         return $media;
     }
@@ -353,15 +329,11 @@ class FileAdder
             ->first();
     }
 
-    protected function dispatchConversions(Media $media): void
+    protected function dispatchConversions(Media $media, mixed $collectionDef): void
     {
-        if (! $media->isImage() || ! method_exists($this->subject, 'getRegisteredMediaConversions')) {
+        if (! method_exists($this->subject, 'getRegisteredMediaConversions')) {
             return;
         }
-
-        $collectionDef = method_exists($this->subject, 'getMediaCollection')
-            ? $this->subject->getMediaCollection($this->collection)
-            : null;
 
         if ($collectionDef && ! $collectionDef->shouldPerformConversions()) {
             return;
@@ -374,6 +346,23 @@ class FileAdder
 
         if (empty($all)) {
             return;
+        }
+
+        $convDisk = $collectionDef?->getConversionsDisk()
+            ?? config('media.conversions_disk')
+            ?? $media->disk;
+
+        $mediaConversionClass = config('media.models.media_conversion', MediaConversion::class);
+
+        // Create a pending record for every applicable conversion
+        foreach ($all as $conversion) {
+            $mediaConversionClass::create([
+                'media_id'  => $media->id,
+                'name'      => $conversion->name,
+                'status'    => 'pending',
+                'disk'      => $convDisk,
+                'extension' => $conversion->getFormat() ?: pathinfo($media->file_name, PATHINFO_EXTENSION),
+            ]);
         }
 
         $sync  = array_values(array_filter($all, fn ($c) => ! $c->isQueued()));
@@ -460,8 +449,7 @@ class FileAdder
 
         if (! $host || ! in_array($host, (array) $allowed, true)) {
             throw new InvalidArgumentException(
-                "Domain [{$host}] is not in the media.allowed_domains list. "
-                . 'Add it to config or set MEDIA_ALLOWED_DOMAINS=* to allow all.'
+                "Domain [{$host}] is not in the media.allowed_domains list."
             );
         }
     }
@@ -478,7 +466,7 @@ class FileAdder
 
         $collection = $this->subject->getMediaCollection($this->collection);
 
-        if ($collection === null) {
+        if (! $collection) {
             return;
         }
 
@@ -506,11 +494,10 @@ class FileAdder
 
         $collection = $this->subject->getMediaCollection($this->collection);
 
-        if ($collection === null) {
+        if (! $collection) {
             return;
         }
 
-        // MIME check for UploadedFile only — URL/base64/disk validated post-download
         $allowed = $collection->getAllowedMimeTypes();
 
         if (! empty($allowed) && $this->file instanceof UploadedFile) {
@@ -535,7 +522,6 @@ class FileAdder
             }
         }
 
-        // Custom acceptsFile callable — runs after built-in checks
         $acceptor = $collection->getFileAcceptor();
 
         if ($acceptor !== null && $this->file instanceof UploadedFile) {

@@ -17,17 +17,19 @@ return new class extends Migration
             $table->string('file_name');
             $table->string('mime_type')->nullable();
             $table->string('disk');
-            $table->string('conversions_disk')->nullable();
             $table->unsignedBigInteger('size');
             $table->unsignedInteger('order_column')->nullable()->index();
             $table->string('hash', 32)->nullable()->index();
-            $table->json('custom_properties')->nullable();
-            $table->json('generated_conversions')->nullable();
-            $table->json('manipulations')->nullable();
+            $table->json('properties')->nullable();
             $table->timestamps();
 
             $table->index(['mediable_type', 'mediable_id', 'collection_name'], 'media_mediable_collection_index');
         });
+
+        // GIN index for efficient JSON property queries (PostgreSQL only)
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('CREATE INDEX media_properties_gin ON media USING gin (properties)');
+        }
     }
 
     public function down(): void

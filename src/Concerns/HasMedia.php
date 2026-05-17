@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace Jurager\Media\Concerns;
 
@@ -61,7 +61,7 @@ trait HasMedia
         return $this->morphMany($mediaClass, 'mediable')->orderBy('order_column');
     }
 
-    // ─── Uploading ───────────────────────────────────────────────────────────
+    // â”€â”€â”€ Uploading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function addMedia(UploadedFile|string $file): FileAdder
     {
@@ -98,7 +98,7 @@ trait HasMedia
         return (new FileAdder($this))->setFileFromDisk($path, $disk);
     }
 
-    // ─── Copying ─────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Copying â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Copy media from another model using S3 server-side copy.
@@ -125,12 +125,11 @@ trait HasMedia
         /** @var PathGenerator $generator */
         $generator = app(config('media.path_generator', PathGenerator::class));
 
-        $copy = $original->replicate();
+        $copy = $original->replicate(['conversions']);
         $copy->uuid = (string) Str::uuid();
         $copy->mediable_type = $this->getMorphClass();
         $copy->mediable_id = $this->getKey();
         $copy->order_column = $this->nextOrderColumnFor($original->collection_name);
-        $copy->generated_conversions = [];
         $copy->save();
 
         Storage::disk($original->disk)->copy(
@@ -138,22 +137,27 @@ trait HasMedia
             $generator->getPath($copy) . $copy->file_name,
         );
 
-        $generatedConversions = [];
-        $convDisk = $original->conversions_disk ?? $original->disk;
+        $mediaConversionClass = config('media.models.media_conversion', \Jurager\Media\Models\MediaConversion::class);
 
-        foreach ($original->generated_conversions ?? [] as $name => $ext) {
-            $conversionFileName = $original->getConversionFileName($name);
+        foreach ($original->conversions()->where('status', 'done')->get() as $conversion) {
+            $conversionFileName = $original->getConversionFileName($conversion->name);
 
-            Storage::disk($convDisk)->copy(
+            Storage::disk($conversion->disk)->copy(
                 $generator->getPathForConversions($original) . $conversionFileName,
                 $generator->getPathForConversions($copy) . $conversionFileName,
             );
 
-            $generatedConversions[$name] = $ext;
+            $mediaConversionClass::create([
+                'media_id'     => $copy->id,
+                'name'         => $conversion->name,
+                'status'       => 'done',
+                'disk'         => $conversion->disk,
+                'extension'    => $conversion->extension,
+                'size'         => $conversion->size,
+                'properties'   => $conversion->properties,
+                'completed_at' => $conversion->completed_at,
+            ]);
         }
-
-        $copy->generated_conversions = $generatedConversions;
-        $copy->saveQuietly();
 
         $this->unsetRelation('media');
 
@@ -176,7 +180,7 @@ trait HasMedia
         });
     }
 
-    // ─── Scopes ──────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Scopes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Eager-load the media relation to avoid N+1 queries.
@@ -192,7 +196,7 @@ trait HasMedia
         return $query->with(['media' => fn ($q) => $q->whereIn('collection_name', (array) $collections)]);
     }
 
-    // ─── Retrieval ───────────────────────────────────────────────────────────
+    // â”€â”€â”€ Retrieval â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function getMedia(string $collection = 'default'): Collection
     {
@@ -238,7 +242,7 @@ trait HasMedia
         return $this->getMedia($collection)->isNotEmpty();
     }
 
-    // ─── Ordering ────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Ordering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Reorder media within a collection by providing Media IDs in the desired order.
@@ -263,7 +267,7 @@ trait HasMedia
         $this->unsetRelation('media');
     }
 
-    // ─── Cleanup ─────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Cleanup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function clearMediaCollection(string $collection = 'default'): static
     {
@@ -295,7 +299,7 @@ trait HasMedia
         return $this;
     }
 
-    // ─── Conversions & Collections ───────────────────────────────────────────
+    // â”€â”€â”€ Conversions & Collections â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function registerMediaConversions(Media $media): void {}
 
@@ -337,7 +341,7 @@ trait HasMedia
         return $this->mediaCollections[$name] ?? null;
     }
 
-    // ─── Test assertions ─────────────────────────────────────────────────────
+    // â”€â”€â”€ Test assertions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function assertHasMedia(string $collection = 'default', ?int $count = null): void
     {

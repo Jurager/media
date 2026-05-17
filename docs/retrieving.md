@@ -11,8 +11,9 @@ weight: 60
 // All media in a collection (ordered by order_column)
 $product->getMedia('gallery');              // Illuminate\Support\Collection<Media>
 
-// First item in a collection
+// First / last item in a collection
 $product->getFirstMedia('gallery');         // ?Media
+$product->getLastMedia('gallery');          // ?Media
 
 // Check whether any media exists
 $product->hasMedia('gallery');              // bool
@@ -57,14 +58,22 @@ $media->getTemporaryUrl(now()->addHour(), ['ResponseContentDisposition' => 'atta
 
 ## Image dimensions
 
-Width and height are extracted automatically at upload and stored in `custom_properties`:
+Width and height are extracted automatically at upload and stored in `media.properties`:
 
 ```php
-$media->getCustomProperty('width');   // e.g. 1920
-$media->getCustomProperty('height');  // e.g. 1080
+$media->getWidth();   // e.g. 1920
+$media->getHeight();  // e.g. 1080
 ```
 
-Use these to set `width` and `height` attributes on `<img>` tags, preventing layout shift.
+Use these to set `width` and `height` attributes on `<img>` tags, preventing layout shift. For non-image files (PDFs, documents) these return `null`.
+
+Conversion dimensions are available on the `MediaConversion` record:
+
+```php
+$conv = $media->conversions->firstWhere('name', 'thumb');
+$conv->getWidth();   // width of the generated thumbnail
+$conv->getHeight();
+```
 
 ## File metadata
 
@@ -80,22 +89,6 @@ $media->order_column;         // position within collection
 $media->uuid;                 // unique identifier
 ```
 
-## Custom properties
-
-```php
-// Set at upload time
-$product->addMedia($file)
-    ->withCustomProperties(['alt' => 'Red chair', 'photographer' => 'Studio X'])
-    ->toMediaCollection('gallery');
-
-// Read at any time
-$media->getCustomProperty('alt');
-$media->getCustomProperty('missing_key', 'default value');
-
-// Modify and save
-$media->setCustomProperty('alt', 'Updated description')->save();
-```
-
 ## Reordering
 
 Update the `order_column` for a collection by passing an array of Media IDs in the desired order:
@@ -108,13 +101,13 @@ After reordering, `getMedia()` will return items in the new order. The relations
 
 ## Eager loading
 
-To avoid N+1 queries when listing multiple models use the `withMedia()` scope:
+To avoid N+1 queries when listing multiple models use the `withMedia()` scope. Include `media.conversions` to also load conversion status:
 
 ```php
-// All collections
-$products = Product::withMedia()->get();
+// All collections + conversions
+$products = Product::with(['media.conversions'])->get();
 
-// Only specific collections — other collections will query on demand
+// Scope helper — only specific collections (conversions still need with())
 $products = Product::withMedia(['image', 'gallery'])->get();
 
 foreach ($products as $product) {
@@ -123,12 +116,6 @@ foreach ($products as $product) {
 ```
 
 `getMedia()` checks `$this->relationLoaded('media')` and skips the query when the relation is already loaded.
-
-## Reordering
-
-```php
-$product->reorderMedia('gallery', [3, 1, 2]); // Media IDs in desired order
-```
 
 ## Serving private files
 
@@ -139,9 +126,9 @@ public function show(Media $media): StreamedResponse
 {
     abort_unless(auth()->user()->can('view', $media), 403);
 
-    return $media->stream();    // inline (PDF preview in browser)
+    return $media->stream();               // inline (PDF preview in browser)
     // or
-    return $media->download();              // force download
+    return $media->download();             // force download
     return $media->download('manual.pdf'); // with custom filename
 }
 ```
@@ -159,11 +146,15 @@ $duplicate->copyMediaFrom($product, ['gallery', 'documents']);
 $duplicate->copyMediaFrom($product);
 ```
 
-Already-generated conversions are copied alongside originals.
+Already-generated conversions are copied alongside originals, including their `MediaConversion` records.
 
 ## Checking conversion status
 
 ```php
 $media->hasGeneratedConversion('thumb');  // false while job is pending
 $media->getUrl('thumb');                  // returns original URL when pending
+
+$media->pendingConversions();             // ['medium', 'large'] — names with status=pending
+$media->failedConversions();             // names with status=failed
+$media->isConversionPending('medium');   // bool
 ```

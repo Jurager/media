@@ -5,9 +5,9 @@ weight: 50
 
 # Conversions
 
-A **conversion** is a derived version of an uploaded image — a thumbnail, a medium-sized preview, or a WebP reformat. Conversions are defined per model and generated automatically after each image upload.
+A **conversion** is a derived version of an uploaded file — a thumbnail, a medium-sized preview, or a WebP reformat. Conversions are defined per model and generated automatically after upload.
 
-Non-image files (PDFs, documents, etc.) are stored as-is; conversions are never attempted for them.
+Which file types can be converted depends on the registered converters (see [Pluggable converters](#pluggable-converters) below). Out of the box: all `image/*` types and `application/pdf`.
 
 ## Defining conversions
 
@@ -59,7 +59,7 @@ Both `width()` and `height()` can be combined — the image is scaled to fit wit
 ->format('avif')  // AVIF (requires Imagick)
 ```
 
-When a format is specified, the stored extension in `generated_conversions` reflects it — `getUrl('thumb')` returns the correct URL regardless of the original format.
+When a format is specified, the extension is stored in the `MediaConversion` record — `getUrl('thumb')` returns the correct URL regardless of the original format.
 
 ## Quality
 
@@ -96,13 +96,11 @@ Override the default queue for a specific conversion:
 ```php
 public function registerMediaConversions(Media $media): void
 {
-    // Listed in the product immediately — high priority
     $this->addMediaConversion('thumb')
         ->fit(200, 200)
         ->format('webp')
         ->onQueue('high');
 
-    // Needed less urgently — default queue
     $this->addMediaConversion('medium')->width(800);
     $this->addMediaConversion('large')->width(1600);
 }
@@ -114,11 +112,93 @@ Conversions are grouped by queue and dispatched as separate jobs, so `onQueue('h
 
 ```php
 $media->hasGeneratedConversion('thumb');  // bool — is it ready?
-$media->isConversionPending('medium');    // bool — registered but not yet generated?
+$media->isConversionPending('medium');    // bool — status=pending?
 $media->pendingConversions();             // ['medium', 'large'] — all pending names
+$media->failedConversions();             // names with status=failed
 ```
 
-`pendingConversions()` loads the mediable relation to read the model's registered conversions. Eager-load `media.mediable` when calling this in a loop.
+These methods read from the `media_conversions` table. Eager-load `media.conversions` when calling them in a loop to avoid N+1 queries.
+
+## Pluggable converters
+
+Conversions are not limited to images. The package routes each file through a **converter** selected by MIME type. You can register converters for any file type.
+
+### Built-in converters
+
+| Converter | MIME pattern | Requirements |
+|-----------|-------------|--------------|
+| `ImageConverter` | `image/*` | `ext-gd` or `ext-imagick` |
+| `PdfConverter` | `application/pdf` | `ext-imagick` + Ghostscript |
+
+### PDF preview
+
+`PdfConverter` rasterizes a single page of a PDF to an image, then applies all standard image transformations (resize, format, quality):
+
+```php
+public function registerMediaCollections(): void
+{
+    $this->addMediaCollection('documents')
+        ->acceptsMimeTypes(['application/pdf']);
+}
+
+public function registerMediaConversions(Media $media): void
+{
+    $this->addMediaConversion('preview')
+        ->width(800)
+        ->format('jpg')
+        ->quality(85)
+        ->performOnCollections('documents');
+}
+```
+
+Configure in `config/media.php`:
+
+```php
+'pdf_converter' => [
+    'resolution' => env('MEDIA_PDF_RESOLUTION', 150), // DPI — higher = sharper but slower
+    'page'       => 0,                                 // 0-indexed page to render
+],
+```
+
+Files with no registered converter (e.g. DOCX uploaded to a collection that has a conversion defined) will have their `MediaConversion` record marked `status=failed` with a descriptive `error_message`. This is visible via `$media->failedConversions()`.
+
+### Custom converter
+
+Implement the `Converter` interface and register it in `config/media.php`:
+
+```php
+use Jurager\Media\Contracts\Converter;
+use Jurager\Media\Converters\ConversionResult;
+use Jurager\Media\Conversions\Conversion;
+use Jurager\Media\Models\Media;
+
+class VideoThumbnailConverter implements Converter
+{
+    public function convert(string $sourcePath, Conversion $conversion, Media $media): ConversionResult
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'media_video_');
+
+        // Extract frame at 00:00:01 using FFMpeg
+        exec("ffmpeg -i {$sourcePath} -ss 00:00:01 -vframes 1 {$tmpFile}.jpg");
+
+        return new ConversionResult(
+            path:      $tmpFile . '.jpg',
+            extension: 'jpg',
+            width:     1920,
+            height:    1080,
+        );
+    }
+}
+```
+
+```php
+// config/media.php
+'converters' => [
+    'image/*'         => \Jurager\Media\Converters\ImageConverter::class,
+    'application/pdf' => \Jurager\Media\Converters\PdfConverter::class,
+    'video/mp4'       => \App\Media\VideoThumbnailConverter::class,
+],
+```
 
 ## Regenerating conversions
 
@@ -129,7 +209,7 @@ When you add a new conversion size or change existing parameters, regenerate for
 php artisan media:regenerate "App\Models\Product"
 
 # Limit to one collection
-php artisan media:regenerate "App\Models\Product" --collection=gallery
+php artisan media:regenerate "App\Models\Product" --collection=documents
 
 # All models in the media table
 php artisan media:regenerate --all
@@ -138,7 +218,7 @@ php artisan media:regenerate --all
 php artisan media:regenerate "App\Models\Product" --sync
 ```
 
-The command resets `generated_conversions` before dispatching so that `getUrl()` falls back to the original while conversions are pending.
+The command resets existing `MediaConversion` records to `status=pending` before dispatching, so that `getUrl()` falls back to the original while conversions are regenerating.
 
 ## Storage layout
 
@@ -148,4 +228,11 @@ Given `Product` with `id=42`, collection `gallery`, file `photo.jpg`:
 product/42/gallery/photo.jpg                        ← original
 product/42/gallery/conversions/photo-thumb.webp     ← thumb conversion
 product/42/gallery/conversions/photo-medium.jpg     ← medium conversion
+```
+
+PDF preview:
+
+```
+product/42/documents/manual.pdf                         ← original
+product/42/documents/conversions/manual-preview.jpg     ← first page preview
 ```

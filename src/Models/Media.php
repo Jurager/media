@@ -1,10 +1,11 @@
-<?php
+﻿<?php
 
 namespace Jurager\Media\Models;
 
 use DateTimeInterface;
 use Illuminate\Contracts\Mail\Attachable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Mail\Attachment;
 use Illuminate\Support\Facades\Storage;
@@ -24,21 +25,16 @@ class Media extends Model implements Attachable
         'file_name',
         'mime_type',
         'disk',
-        'conversions_disk',
         'size',
         'hash',
         'order_column',
-        'custom_properties',
-        'generated_conversions',
-        'manipulations',
+        'properties',
     ];
 
     protected $casts = [
-        'custom_properties'    => 'array',
-        'generated_conversions' => 'array',
-        'manipulations'        => 'array',
-        'size'                 => 'integer',
-        'order_column'         => 'integer',
+        'properties'   => 'array',
+        'size'         => 'integer',
+        'order_column' => 'integer',
     ];
 
     public function mediable(): MorphTo
@@ -46,7 +42,15 @@ class Media extends Model implements Attachable
         return $this->morphTo();
     }
 
-    // ─── URLs ────────────────────────────────────────────────────────────────
+    public function conversions(): HasMany
+    {
+        return $this->hasMany(
+            config('media.models.media_conversion', MediaConversion::class),
+            'media_id',
+        );
+    }
+
+    // â”€â”€â”€ URLs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Public URL for the original or a named conversion.
@@ -54,13 +58,17 @@ class Media extends Model implements Attachable
      */
     public function getUrl(string $conversion = ''): string
     {
-        if ($conversion && ! $this->hasGeneratedConversion($conversion)) {
+        if (! $conversion) {
             return $this->buildUrl($this->disk, $this->getPath());
         }
 
-        $disk = $conversion ? ($this->conversions_disk ?? $this->disk) : $this->disk;
+        $conv = $this->getConversionRecord($conversion);
 
-        return $this->buildUrl($disk, $this->getPath($conversion));
+        if (! $conv || ! $conv->isDone()) {
+            return $this->buildUrl($this->disk, $this->getPath());
+        }
+
+        return $this->buildUrl($conv->disk, $this->getPath($conversion));
     }
 
     /**
@@ -83,7 +91,8 @@ class Media extends Model implements Attachable
         DateTimeInterface $expiration,
         array $options = [],
     ): string {
-        $disk = $this->conversions_disk ?? $this->disk;
+        $conv = $this->getConversionRecord($conversion);
+        $disk = $conv?->disk ?? config('media.conversions_disk') ?? $this->disk;
 
         return Storage::disk($disk)->temporaryUrl(
             $this->getPath($conversion),
@@ -92,18 +101,8 @@ class Media extends Model implements Attachable
         );
     }
 
-    // ─── Mail ────────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Mail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    /**
-     * Implement Laravel's Attachable interface so Media can be passed directly
-     * to Mailable::attachments() without wrapping.
-     *
-     * Usage in a Mailable:
-     *   public function attachments(): array
-     *   {
-     *       return [$this->invoice->getFirstMedia('pdf')];
-     *   }
-     */
     public function toMailAttachment(): Attachment
     {
         return Attachment::fromStorageDisk($this->disk, $this->getPath())
@@ -111,19 +110,13 @@ class Media extends Model implements Attachable
             ->withMime($this->mime_type ?? 'application/octet-stream');
     }
 
-    // ─── Response helpers ────────────────────────────────────────────────────
+    // â”€â”€â”€ Response helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    /**
-     * Stream the file inline — suitable for PDF preview in browser.
-     */
     public function stream(): StreamedResponse
     {
         return Storage::disk($this->disk)->response($this->getPath());
     }
 
-    /**
-     * Force-download the file with the correct Content-Disposition header.
-     */
     public function download(?string $downloadName = null): StreamedResponse
     {
         return Storage::disk($this->disk)->download(
@@ -132,7 +125,7 @@ class Media extends Model implements Attachable
         );
     }
 
-    // ─── Paths ───────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Paths â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function getPath(string $conversion = ''): string
     {
@@ -149,84 +142,104 @@ class Media extends Model implements Attachable
     public function getConversionFileName(string $conversion): string
     {
         $basename = pathinfo($this->file_name, PATHINFO_FILENAME);
-        $ext = $this->generated_conversions[$conversion] ?? pathinfo($this->file_name, PATHINFO_EXTENSION);
+        $ext = $this->getConversionRecord($conversion)?->extension
+            ?? pathinfo($this->file_name, PATHINFO_EXTENSION);
 
         return "{$basename}-{$conversion}.{$ext}";
     }
 
-    // ─── Conversions ─────────────────────────────────────────────────────────
+    // â”€â”€â”€ Conversions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function hasGeneratedConversion(string $name): bool
     {
-        return isset($this->generated_conversions[$name]);
+        return (bool) $this->getConversionRecord($name)?->isDone();
     }
 
-    public function markConversionAsGenerated(string $name, string $ext): void
+    public function markConversionAsGenerated(string $name, string $ext, array $properties = [], int $size = 0): void
     {
-        $conversions = $this->generated_conversions ?? [];
-        $conversions[$name] = $ext;
-        $this->generated_conversions = $conversions;
-        $this->saveQuietly();
+        $data = [
+            'status'       => 'done',
+            'extension'    => $ext,
+            'completed_at' => now(),
+        ];
+
+        if (! empty($properties)) {
+            $data['properties'] = $properties;
+        }
+
+        if ($size > 0) {
+            $data['size'] = $size;
+        }
+
+        $this->conversions()->where('name', $name)->update($data);
+
+        $this->unsetRelation('conversions');
     }
 
-    // ─── Type checks ─────────────────────────────────────────────────────────
+    // â”€â”€â”€ Type checks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function isImage(): bool
     {
         return str_starts_with($this->mime_type ?? '', 'image/');
     }
 
-    // ─── Dimensions ──────────────────────────────────────────────────────────
+    // â”€â”€â”€ Properties (system metadata) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    public function getWidth(): ?int
+    public function getProperty(string $key, mixed $default = null): mixed
     {
-        return $this->getCustomProperty('width');
+        return ($this->properties ?? [])[$key] ?? $default;
     }
-
-    public function getHeight(): ?int
-    {
-        return $this->getCustomProperty('height');
-    }
-
-    // ─── Custom properties ───────────────────────────────────────────────────
-
-    public function getCustomProperty(string $key, mixed $default = null): mixed
-    {
-        return ($this->custom_properties ?? [])[$key] ?? $default;
-    }
-
-    public function setCustomProperty(string $key, mixed $value): static
-    {
-        $properties = $this->custom_properties ?? [];
-        $properties[$key] = $value;
-        $this->custom_properties = $properties;
-
-        return $this;
-    }
-
-    // ─── Conversion status ───────────────────────────────────────────────────
 
     /**
-     * Names of conversions registered on the mediable model but not yet generated.
+     * Original image width in pixels. Null for non-image files.
+     */
+    public function getWidth(): ?int
+    {
+        return $this->getProperty('width');
+    }
+
+    /**
+     * Original image height in pixels.
+     */
+    public function getHeight(): ?int
+    {
+        return $this->getProperty('height');
+    }
+
+    // â”€â”€â”€ Conversion status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    /**
+     * Names of conversions with status = pending.
      *
      * @return string[]
      */
     public function pendingConversions(): array
     {
-        $mediable = $this->mediable;
-
-        if (! $mediable || ! method_exists($mediable, 'getRegisteredMediaConversions')) {
-            return [];
+        if ($this->relationLoaded('conversions')) {
+            return $this->conversions
+                ->where('status', 'pending')
+                ->pluck('name')
+                ->all();
         }
 
-        return collect($mediable->getRegisteredMediaConversions())
-            ->filter(fn ($c) =>
-                $c->shouldBePerformedOn($this->collection_name) &&
-                ! $this->hasGeneratedConversion($c->name)
-            )
-            ->map(fn ($c) => $c->name)
-            ->values()
-            ->all();
+        return $this->conversions()->where('status', 'pending')->pluck('name')->all();
+    }
+
+    /**
+     * Names of conversions with status = failed.
+     *
+     * @return string[]
+     */
+    public function failedConversions(): array
+    {
+        if ($this->relationLoaded('conversions')) {
+            return $this->conversions
+                ->where('status', 'failed')
+                ->pluck('name')
+                ->all();
+        }
+
+        return $this->conversions()->where('status', 'failed')->pluck('name')->all();
     }
 
     public function isConversionPending(string $name): bool
@@ -234,7 +247,7 @@ class Media extends Model implements Attachable
         return in_array($name, $this->pendingConversions(), true);
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function humanReadableSize(): string
     {
@@ -252,9 +265,6 @@ class Media extends Model implements Attachable
 
     /**
      * Fake the media disk(s) for testing.
-     *
-     *   Media::fake();
-     *   Media::fake(['s3-private']);
      */
     public static function fake(array $additionalDisks = []): void
     {
@@ -269,7 +279,16 @@ class Media extends Model implements Attachable
         }
     }
 
-    // ─── Internal ────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Internal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    protected function getConversionRecord(string $name): ?MediaConversion
+    {
+        if ($this->relationLoaded('conversions')) {
+            return $this->conversions->firstWhere('name', $name);
+        }
+
+        return $this->conversions()->where('name', $name)->first();
+    }
 
     protected function buildUrl(string $disk, string $path): string
     {
@@ -292,14 +311,26 @@ class Media extends Model implements Attachable
             /** @var PathGenerator $generator */
             $generator = app(config('media.path_generator', PathGenerator::class));
 
+            // Delete original file
             Storage::disk($media->disk)->delete(
                 $generator->getPath($media) . $media->file_name
             );
 
-            $conversionsDisk = $media->conversions_disk ?? $media->disk;
-            Storage::disk($conversionsDisk)->deleteDirectory(
-                $generator->getPathForConversions($media)
-            );
+            // Delete conversions directory from each unique disk conversions were stored on
+            $conversionsPath = $generator->getPathForConversions($media);
+            $media->load('conversions');
+
+            $disks = $media->conversions->pluck('disk')->filter()->unique()->all();
+
+            if (empty($disks)) {
+                $fallback = config('media.conversions_disk') ?? $media->disk;
+                Storage::disk($fallback)->deleteDirectory($conversionsPath);
+            } else {
+                foreach ($disks as $disk) {
+                    Storage::disk($disk)->deleteDirectory($conversionsPath);
+                }
+            }
+            // media_conversions rows are deleted by FK cascade
         });
     }
 }

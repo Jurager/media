@@ -6,6 +6,8 @@ return [
     |--------------------------------------------------------------------------
     | Default Storage Disk
     |--------------------------------------------------------------------------
+    | The Laravel filesystem disk where original files are stored.
+    | Typically an S3-compatible disk defined in config/filesystems.php.
     */
     'disk' => env('MEDIA_DISK', 's3'),
 
@@ -13,7 +15,8 @@ return [
     |--------------------------------------------------------------------------
     | Conversions Disk
     |--------------------------------------------------------------------------
-    | Null means same disk as originals.
+    | Disk used to store generated conversions. Defaults to the same disk as
+    | the original when null. Override per-collection with storeConversionsOnDisk().
     */
     'conversions_disk' => env('MEDIA_CONVERSIONS_DISK', null),
 
@@ -21,15 +24,18 @@ return [
     |--------------------------------------------------------------------------
     | CDN URL
     |--------------------------------------------------------------------------
-    | When set, all public URLs will use this base instead of the S3 URL.
-    | Example: https://cdn.example.com or https://d1234.cloudfront.net
+    | When set, all getUrl() calls — originals and conversions — prepend this
+    | base URL instead of the disk URL. No code changes required in the app.
+    | Example: https://d1234example.cloudfront.net
     */
     'cdn_url' => env('MEDIA_CDN_URL', null),
 
     /*
     |--------------------------------------------------------------------------
-    | Queue Name
+    | Queue
     |--------------------------------------------------------------------------
+    | Queue name for async conversion jobs. Set to 'sync' to disable queueing
+    | globally (not recommended for production — use ->nonQueued() per conversion).
     */
     'queue' => env('MEDIA_QUEUE', 'default'),
 
@@ -37,16 +43,19 @@ return [
     |--------------------------------------------------------------------------
     | Image Driver
     |--------------------------------------------------------------------------
-    | Options: 'gd' or 'imagick'.
+    | Intervention Image driver to use for image processing.
+    | 'gd'      — default, available in most environments (ext-gd)
+    | 'imagick' — better quality, required for AVIF and PDF conversion (ext-imagick)
     */
     'image_driver' => env('MEDIA_IMAGE_DRIVER', 'gd'),
 
     /*
     |--------------------------------------------------------------------------
-    | EXIF Stripping
+    | Strip EXIF
     |--------------------------------------------------------------------------
-    | Strip EXIF metadata (GPS, camera info) from uploaded images.
-    | Re-encodes the original before uploading — adds slight overhead.
+    | When true, uploaded images are re-encoded before being stored, which
+    | discards EXIF metadata (GPS coordinates, camera model, author, etc.).
+    | Disable only if preserving EXIF is required (e.g. internal archival).
     */
     'strip_exif' => env('MEDIA_STRIP_EXIF', true),
 
@@ -54,17 +63,17 @@ return [
     |--------------------------------------------------------------------------
     | Deduplication
     |--------------------------------------------------------------------------
-    | When enabled, uploading the same file (same MD5 hash) to the same
-    | model+collection returns the existing Media record without re-uploading.
-    | Useful for idempotent imports.
+    | When true, uploading a file computes its MD5 hash and returns the existing
+    | Media record if an identical file already exists in the same model+collection.
+    | Designed for idempotent imports — safe to run the same import twice.
     */
     'deduplication' => env('MEDIA_DEDUPLICATION', true),
 
     /*
     |--------------------------------------------------------------------------
-    | URL Download Timeout
+    | Download Timeout
     |--------------------------------------------------------------------------
-    | Timeout in seconds when downloading files from external URLs.
+    | HTTP timeout in seconds for addMediaFromUrl() downloads.
     */
     'download_timeout' => env('MEDIA_DOWNLOAD_TIMEOUT', 60),
 
@@ -73,8 +82,9 @@ return [
     | Allowed Domains for URL Downloads
     |--------------------------------------------------------------------------
     | Restricts addMediaFromUrl() to specific hostnames to prevent SSRF attacks.
-    | Use ['*'] to allow all domains (not recommended for user-facing endpoints).
-    | Example: ['cdn.example.com', 's3.amazonaws.com', 'storage.googleapis.com']
+    | Set to ['*'] to allow all domains (trusted internal callers only).
+    | When empty (default), all URL downloads are blocked.
+    | Example: ['cdn.supplier.com', 'assets.brand.com']
     */
     'allowed_domains' => env('MEDIA_ALLOWED_DOMAINS')
         ? explode(',', env('MEDIA_ALLOWED_DOMAINS'))
@@ -82,17 +92,57 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Model Classes
+    | Converters
     |--------------------------------------------------------------------------
+    | Maps MIME type patterns to converter classes (implement Converter interface).
+    | Exact match (e.g. 'application/pdf') takes priority over wildcards ('image/*').
+    | Register your own converter for any file type — video, SVG, Office docs, etc.
+    |
+    | Built-in converters:
+    |   ImageConverter — handles all image/* types via Intervention Image (ext-gd or ext-imagick)
+    |   PdfConverter  — rasterizes a PDF page to an image (requires ext-imagick + Ghostscript)
+    |
+    | File types with no registered converter will have their conversions marked
+    | as failed with a clear error message in media_conversions.error_message.
+    */
+    'converters' => [
+        'image/*'         => \Jurager\Media\Converters\ImageConverter::class,
+        'application/pdf' => \Jurager\Media\Converters\PdfConverter::class,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | PDF Converter Options
+    |--------------------------------------------------------------------------
+    | Configuration for PdfConverter. Requires ext-imagick and Ghostscript (gs).
+    |
+    | resolution — DPI used when rasterizing the PDF page. Higher values produce
+    |              sharper previews but larger files. 150 is a good default.
+    | page       — 0-indexed page number to render (0 = first page).
+    */
+    'pdf_converter' => [
+        'resolution' => env('MEDIA_PDF_RESOLUTION', 150),
+        'page'       => 0,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Models
+    |--------------------------------------------------------------------------
+    | Override the default Eloquent models if you need to extend them.
     */
     'models' => [
-        'media' => \Jurager\Media\Models\Media::class,
+        'media'            => \Jurager\Media\Models\Media::class,
+        'media_conversion' => \Jurager\Media\Models\MediaConversion::class,
     ],
 
     /*
     |--------------------------------------------------------------------------
     | Path Generator
     |--------------------------------------------------------------------------
+    | Class responsible for generating storage paths.
+    | Default: {ModelClass}/{id}/{collection}/
+    | Implement PathGenerator and register your class here to customise.
     */
     'path_generator' => \Jurager\Media\Support\PathGenerator::class,
 

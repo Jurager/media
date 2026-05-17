@@ -50,26 +50,36 @@ $product->addMediaFromBase64(base64_encode(file_get_contents($path)), 'image/png
     ->toMediaCollection('image');
 ```
 
+## From an existing disk
+
+Import a file already stored on a disk (e.g. another S3 bucket) without downloading it to your server:
+
+```php
+$product->addMediaFromDisk('exports/logo.png', 's3-archive')
+    ->toMediaCollection('image');
+```
+
 ## FileAdder options
 
 Chain these before calling `toMediaCollection()`:
 
 ```php
 $product->addMedia($file)
-    ->usingName('Product hero shot')       // human-readable name on the Media record
-    ->usingFileName('hero.jpg')            // override the stored filename
-    ->withCustomProperties(['alt' => 'A red chair'])
+    ->usingName('Product hero shot')   // human-readable name on the Media record
+    ->usingFileName('hero.jpg')        // override the stored filename
+    ->preservingOriginal()             // keep the source file (local path only)
     ->toMediaCollection('image');
 ```
 
 ## What happens on upload
 
 1. File is resolved to a local temp path (downloaded or decoded if needed).
-2. `ImageProcessor` extracts `width`/`height` for images and strips EXIF (when `strip_exif` is `true`).
+2. `ImageProcessor` extracts `width`/`height` for images (stored in `media.properties`) and strips EXIF when `strip_exif` is `true`.
 3. If `deduplication` is enabled, the MD5 hash is compared against existing records for the same model + collection. A duplicate returns the existing `Media` record without re-uploading.
 4. The `Media` record is created and the file is written to the configured S3 disk.
-5. Image conversions are dispatched — synchronously for `.nonQueued()` conversions, to the queue for the rest.
-6. The new `Media` instance is returned.
+5. A `MediaConversion` record with `status=pending` is created for each applicable conversion.
+6. Image conversions are dispatched — synchronously for `.nonQueued()` conversions, to the queue for the rest.
+7. The new `Media` instance is returned.
 
 ## Batch import pattern
 

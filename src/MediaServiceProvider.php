@@ -7,12 +7,23 @@ use Illuminate\Support\ServiceProvider;
 use Jurager\Media\Console\Commands\MediaCleanCommand;
 use Jurager\Media\Console\Commands\MediaRegenerateCommand;
 use Jurager\Media\Models\Media;
+use Jurager\Media\Support\ConverterRegistry;
 
 class MediaServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__ . '/../config/media.php', 'media');
+
+        $this->app->singleton(ConverterRegistry::class, function () {
+            $registry = new ConverterRegistry;
+
+            foreach (config('media.converters', []) as $mime => $class) {
+                $registry->register($mime, $class);
+            }
+
+            return $registry;
+        });
     }
 
     public function boot(): void

@@ -236,7 +236,7 @@ php artisan media:regenerate --all
 php artisan media:regenerate "App\Models\Product" --sync
 ```
 
-The command resets `generated_conversions` before dispatching jobs, so `getUrl()` falls back to the original while conversions are pending.
+The command resets existing `MediaConversion` records to `status=pending` before dispatching jobs, so `getUrl()` falls back to the original while conversions are regenerating.
 
 ---
 

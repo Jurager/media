@@ -9,29 +9,22 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
-use Intervention\Image\Drivers\Gd\Driver as GdDriver;
-use Intervention\Image\Drivers\Imagick\Driver as ImagickDriver;
-use Intervention\Image\ImageManager;
 use Jurager\Media\Conversions\Conversion;
 use Jurager\Media\Events\MediaConversionGenerated;
 use Jurager\Media\Models\Media;
+use Jurager\Media\Models\MediaConversion;
+use Jurager\Media\Support\ConverterRegistry;
 use Jurager\Media\Support\PathGenerator;
 
 class PerformConversionsJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /** Retry up to 3 times on transient S3 / Intervention failures. */
     public int $tries = 3;
 
-    /**
-     * Silently discard the job when the Media record was deleted before this job ran.
-     * Without this flag SerializesModels would throw ModelNotFoundException and mark the job as failed.
-     */
     public bool $deleteWhenMissingModels = true;
 
     /**
-     * @param  Media  $media
      * @param  Conversion[]  $conversions
      */
     public function __construct(
@@ -39,10 +32,6 @@ class PerformConversionsJob implements ShouldQueue, ShouldBeUnique
         public readonly array $conversions,
     ) {}
 
-    /**
-     * Unique key includes conversion names so jobs split across different queues
-     * (via ->onQueue()) don't block each other, while identical dispatches deduplicate.
-     */
     public function uniqueId(): string
     {
         $names = implode('_', array_map(fn (Conversion $c) => $c->name, $this->conversions));
@@ -50,13 +39,11 @@ class PerformConversionsJob implements ShouldQueue, ShouldBeUnique
         return "media_{$this->media->id}_{$names}";
     }
 
-    /** Release the unique lock after 10 minutes regardless of job state. */
     public function uniqueFor(): int
     {
         return 600;
     }
 
-    /** Exponential backoff: 30 s → 60 s → 120 s between retries. */
     public function backoff(): array
     {
         return [30, 60, 120];
@@ -64,21 +51,39 @@ class PerformConversionsJob implements ShouldQueue, ShouldBeUnique
 
     public function handle(): void
     {
-        if (! $this->media->isImage()) {
-            return;
-        }
+        $mediaConversionClass = config('media.models.media_conversion', MediaConversion::class);
+        $names = array_map(fn (Conversion $c) => $c->name, $this->conversions);
+
+        // Mark conversions as processing (also covers retries which have status=failed)
+        $mediaConversionClass::where('media_id', $this->media->id)
+            ->whereIn('name', $names)
+            ->whereIn('status', ['pending', 'failed'])
+            ->update(['status' => 'processing', 'error_message' => null]);
+
+        // Pre-load conversion records so each iteration doesn't query individually
+        $conversionRecords = $mediaConversionClass::where('media_id', $this->media->id)
+            ->whereIn('name', $names)
+            ->get()
+            ->keyBy('name');
 
         /** @var PathGenerator $generator */
         $generator = app(config('media.path_generator', PathGenerator::class));
+        /** @var ConverterRegistry $registry */
+        $registry  = app(ConverterRegistry::class);
 
         $originalPath = $generator->getPath($this->media) . $this->media->file_name;
         $stream = Storage::disk($this->media->disk)->readStream($originalPath);
 
         if ($stream === null) {
+            $mediaConversionClass::where('media_id', $this->media->id)
+                ->whereIn('name', $names)
+                ->where('status', 'processing')
+                ->update(['status' => 'failed', 'error_message' => 'Original file not found on disk.']);
+
             return;
         }
 
-        $tmpFile = tempnam(sys_get_temp_dir(), 'jurager_media_conv_');
+        $tmpFile = tempnam(sys_get_temp_dir(), 'jurager_media_orig_');
 
         try {
             $dest = fopen($tmpFile, 'wb');
@@ -86,74 +91,64 @@ class PerformConversionsJob implements ShouldQueue, ShouldBeUnique
             fclose($dest);
             fclose($stream);
 
-            $manager = $this->buildImageManager();
-
             foreach ($this->conversions as $conversion) {
-                $this->processConversion($manager, $generator, $tmpFile, $conversion);
+                $record        = $conversionRecords->get($conversion->name);
+                $conversionTmp = null;
+
+                try {
+                    $converter = $registry->resolve($this->media->mime_type);
+
+                    if ($converter === null) {
+                        $mediaConversionClass::where('media_id', $this->media->id)
+                            ->where('name', $conversion->name)
+                            ->update([
+                                'status'        => 'failed',
+                                'error_message' => "No converter registered for [{$this->media->mime_type}].",
+                            ]);
+
+                        continue;
+                    }
+
+                    $result        = $converter->convert($tmpFile, $conversion, $this->media);
+                    $conversionTmp = $result->path;
+
+                    $basename           = pathinfo($this->media->file_name, PATHINFO_FILENAME);
+                    $conversionFileName = "{$basename}-{$conversion->name}.{$result->extension}";
+                    $conversionPath     = $generator->getPathForConversions($this->media) . $conversionFileName;
+
+                    $content    = file_get_contents($conversionTmp);
+                    $resultSize = strlen($content);
+
+                    $convDisk = $record?->disk ?? config('media.conversions_disk') ?? $this->media->disk;
+                    Storage::disk($convDisk)->put($conversionPath, $content);
+
+                    $properties = array_filter([
+                        'width'  => $result->width,
+                        'height' => $result->height,
+                    ]);
+
+                    $this->media->markConversionAsGenerated(
+                        $conversion->name,
+                        $result->extension,
+                        $properties,
+                        $resultSize,
+                    );
+
+                    event(new MediaConversionGenerated($this->media, $conversion));
+                } catch (\Throwable $e) {
+                    $mediaConversionClass::where('media_id', $this->media->id)
+                        ->where('name', $conversion->name)
+                        ->update(['status' => 'failed', 'error_message' => $e->getMessage()]);
+
+                    throw $e;
+                } finally {
+                    if ($conversionTmp !== null && is_file($conversionTmp)) {
+                        @unlink($conversionTmp);
+                    }
+                }
             }
         } finally {
             @unlink($tmpFile);
         }
-    }
-
-    protected function processConversion(
-        ImageManager $manager,
-        PathGenerator $generator,
-        string $tmpFile,
-        Conversion $conversion,
-    ): void {
-        $image = $manager->read($tmpFile);
-
-        $hasWidth = $conversion->getWidth() > 0;
-        $hasHeight = $conversion->getHeight() > 0;
-
-        if ($hasWidth || $hasHeight) {
-            match ($conversion->getFitMethod()) {
-                'cover'   => $image->cover(
-                    $conversion->getWidth() ?: $conversion->getHeight(),
-                    $conversion->getHeight() ?: $conversion->getWidth(),
-                ),
-                'contain' => $image->contain(
-                    $conversion->getWidth() ?: $conversion->getHeight(),
-                    $conversion->getHeight() ?: $conversion->getWidth(),
-                ),
-                default   => $image->scale(
-                    $hasWidth ? $conversion->getWidth() : null,
-                    $hasHeight ? $conversion->getHeight() : null,
-                ),
-            };
-        }
-
-        $format = $conversion->getFormat();
-        $quality = $conversion->getQuality();
-
-        $encoded = match ($format) {
-            'webp' => $image->toWebp($quality),
-            'png'  => $image->toPng(),
-            'gif'  => $image->toGif(),
-            'avif' => $image->toAvif($quality),
-            default => $image->toJpeg($quality),
-        };
-
-        $ext = $format ?: pathinfo($this->media->file_name, PATHINFO_EXTENSION);
-        $basename = pathinfo($this->media->file_name, PATHINFO_FILENAME);
-        $conversionFileName = "{$basename}-{$conversion->name}.{$ext}";
-        $conversionPath = $generator->getPathForConversions($this->media) . $conversionFileName;
-
-        $conversionsDisk = $this->media->conversions_disk ?? $this->media->disk;
-        Storage::disk($conversionsDisk)->put($conversionPath, (string) $encoded);
-
-        $this->media->markConversionAsGenerated($conversion->name, $ext);
-
-        event(new MediaConversionGenerated($this->media, $conversion));
-    }
-
-    protected function buildImageManager(): ImageManager
-    {
-        $driver = config('media.image_driver', 'gd') === 'imagick'
-            ? new ImagickDriver
-            : new GdDriver;
-
-        return new ImageManager($driver);
     }
 }

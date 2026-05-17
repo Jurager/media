@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace Jurager\Media\Contracts;
 
@@ -11,7 +11,7 @@ use Jurager\Media\Support\FileAdder;
 
 interface InteractsWithMedia
 {
-    // ─── Uploading ───────────────────────────────────────────────────────────
+    // â”€â”€â”€ Uploading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function addMedia(mixed $file): FileAdder;
 
@@ -21,15 +21,15 @@ interface InteractsWithMedia
 
     public function addMediaFromDisk(string $path, string $disk): FileAdder;
 
-    // ─── Copying ─────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Copying â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function copyMediaFrom(object $source, string|array|null $collections = null): void;
 
-    // ─── Scopes ──────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Scopes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function scopeWithMedia(Builder $query, string|array|null $collections = null): Builder;
 
-    // ─── Retrieval ───────────────────────────────────────────────────────────
+    // â”€â”€â”€ Retrieval â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function getMedia(string $collection = 'default'): Collection;
 
@@ -43,17 +43,17 @@ interface InteractsWithMedia
 
     public function hasMedia(string $collection = 'default'): bool;
 
-    // ─── Ordering ────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Ordering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function reorderMedia(string $collection, array $orderedIds): void;
 
-    // ─── Cleanup ─────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Cleanup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function clearMediaCollection(string $collection = 'default'): static;
 
     public function clearMediaCollectionExcept(string $collection = 'default', Media|iterable $except = []): static;
 
-    // ─── Conversions & Collections ───────────────────────────────────────────
+    // â”€â”€â”€ Conversions & Collections â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function registerMediaConversions(Media $media): void;
 

@@ -5,6 +5,7 @@ namespace Jurager\Media\Console\Commands;
 use Illuminate\Console\Command;
 use Jurager\Media\Jobs\PerformConversionsJob;
 use Jurager\Media\Models\Media;
+use Jurager\Media\Models\MediaConversion;
 
 class MediaRegenerateCommand extends Command
 {
@@ -20,6 +21,7 @@ class MediaRegenerateCommand extends Command
     public function handle(): int
     {
         $mediaClass = config('media.models.media', Media::class);
+        $mediaConversionClass = config('media.models.media_conversion', MediaConversion::class);
         $modelClass = $this->argument('model');
         $collection = $this->option('collection');
         $all = (bool) $this->option('all');
@@ -32,9 +34,7 @@ class MediaRegenerateCommand extends Command
             return self::FAILURE;
         }
 
-        $query = $mediaClass::query()->where(function ($q) {
-            $q->whereRaw("mime_type LIKE 'image/%'");
-        });
+        $query = $mediaClass::query()->whereRaw("mime_type LIKE 'image/%'");
 
         if ($modelClass) {
             $query->where('mediable_type', (new $modelClass)->getMorphClass());
@@ -58,7 +58,7 @@ class MediaRegenerateCommand extends Command
 
         $processed = 0;
 
-        $query->chunkById($chunk, function ($records) use ($sync, &$processed, $bar) {
+        $query->chunkById($chunk, function ($records) use ($sync, $mediaConversionClass, &$processed, $bar) {
             foreach ($records as $media) {
                 $conversions = $this->getConversionsFor($media);
 
@@ -67,9 +67,20 @@ class MediaRegenerateCommand extends Command
                     continue;
                 }
 
-                // Reset generated_conversions so getUrl() falls back to original while re-generating
-                $media->generated_conversions = [];
-                $media->saveQuietly();
+                $names = array_map(fn ($c) => $c->name, $conversions);
+
+                // Reset existing records to pending (upsert so new conversions also get created)
+                foreach ($conversions as $conversion) {
+                    $mediaConversionClass::updateOrCreate(
+                        ['media_id' => $media->id, 'name' => $conversion->name],
+                        [
+                            'status'        => 'pending',
+                            'error_message' => null,
+                            'completed_at'  => null,
+                            'properties'    => null,
+                        ],
+                    );
+                }
 
                 if ($sync) {
                     PerformConversionsJob::dispatchSync($media, $conversions);
@@ -92,9 +103,7 @@ class MediaRegenerateCommand extends Command
         return self::SUCCESS;
     }
 
-    /**
-     * @return \Jurager\Media\Conversions\Conversion[]
-     */
+    /** @return \Jurager\Media\Conversions\Conversion[] */
     protected function getConversionsFor(Media $media): array
     {
         $mediable = $media->mediable;
@@ -103,9 +112,9 @@ class MediaRegenerateCommand extends Command
             return [];
         }
 
-        return array_filter(
+        return array_values(array_filter(
             $mediable->getRegisteredMediaConversions(),
             fn ($c) => $c->shouldBePerformedOn($media->collection_name),
-        );
+        ));
     }
 }

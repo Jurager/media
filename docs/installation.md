@@ -29,7 +29,7 @@ Creates `config/media.php`. Key options:
 | Key | Default | Description |
 |-----|---------|-------------|
 | `disk` | `s3` | Laravel disk for storing original files |
-| `conversions_disk` | `null` | Disk for conversions; `null` uses same as `disk` |
+| `conversions_disk` | `null` | Default disk for conversions; `null` uses same as `disk` |
 | `cdn_url` | `null` | CDN base URL (e.g. CloudFront); replaces S3 URLs globally |
 | `queue` | `default` | Queue name for async conversion jobs |
 | `image_driver` | `gd` | `gd` or `imagick` |
@@ -37,6 +37,7 @@ Creates `config/media.php`. Key options:
 | `deduplication` | `true` | Skip re-uploading identical files (same MD5) per model+collection |
 | `download_timeout` | `60` | HTTP timeout in seconds for `addMediaFromUrl()` |
 | `models.media` | `Media::class` | Override the Media model |
+| `models.media_conversion` | `MediaConversion::class` | Override the MediaConversion model |
 | `path_generator` | `PathGenerator::class` | Override the S3 path strategy |
 
 ## Environment variables
@@ -57,24 +58,37 @@ php artisan vendor:publish --tag=media-migrations
 php artisan migrate
 ```
 
-This creates the `media` table:
+This creates two tables:
+
+### `media`
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `mediable_type`, `mediable_id` | morph | The owning model |
-| `uuid` | string | Unique identifier (used in filenames) |
+| `uuid` | string | Unique identifier |
 | `collection_name` | string | Logical group (`image`, `gallery`, `documents`, …) |
 | `name` | string | Human-readable label |
 | `file_name` | string | Sanitized filename stored on disk |
 | `mime_type` | string | MIME type detected at upload |
 | `disk` | string | Laravel disk name |
-| `conversions_disk` | string | Disk for conversions (may differ from originals) |
 | `size` | bigint | File size in bytes |
 | `hash` | string | MD5 of the uploaded file; indexed for deduplication |
 | `order_column` | int | Position within the collection |
-| `custom_properties` | json | Arbitrary key-value metadata; `width`/`height` added automatically for images |
-| `generated_conversions` | json | `{"thumb": "webp", "medium": "jpg"}` — tracks which conversions exist and their format |
-| `manipulations` | json | Reserved for future programmatic transformations |
+| `properties` | json | System metadata: `width`/`height` for images (GIN-indexed on PostgreSQL) |
+
+### `media_conversions`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `media_id` | bigint | FK → `media.id` (cascade delete) |
+| `name` | string | Conversion name (`thumb`, `medium`, …) |
+| `status` | string | `pending` · `processing` · `done` · `failed` |
+| `disk` | string | Disk where this conversion is stored |
+| `extension` | string | File extension for this conversion |
+| `size` | bigint | Conversion file size in bytes |
+| `properties` | json | System metadata: `width`/`height` for image conversions (GIN-indexed on PostgreSQL) |
+| `error_message` | text | Populated when status = `failed` |
+| `completed_at` | timestamp | Set when status = `done` |
 
 ## Overriding the Media model
 

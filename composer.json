@@ -26,7 +26,8 @@
     },
     "suggest": {
         "ext-gd": "Required for GD image driver (default)",
-        "ext-imagick": "Alternative to GD, better quality for image processing"
+        "ext-imagick": "Required for Imagick driver and PdfConverter",
+        "ext-ghostscript": "Required by PdfConverter to rasterize PDF files"
     },
     "autoload": {
         "psr-4": {

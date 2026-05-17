@@ -9,43 +9,48 @@ use Intervention\Image\ImageManager;
 class ImageProcessor
 {
     /**
-     * Process an image file: extract dimensions, optionally strip EXIF.
+     * Process an image file: extract dimensions and optionally strip EXIF.
      *
-     * Returns the path to upload (may be a new temp file when EXIF was stripped).
-     * Callers are responsible for unlinking any temp file that was created
-     * (check whether the returned path differs from $filePath).
+     * Returns [string $uploadPath, array $properties] where $properties contains
+     * system metadata (width, height) to be stored in the media.properties column.
+     * $uploadPath may be a new temp file when EXIF was stripped — callers are
+     * responsible for unlinking it if it differs from $filePath.
      *
-     * @param  array<string, mixed>  $customProperties  Modified in-place to add width/height.
+     * For non-image files returns [$filePath, []] unchanged.
+     *
+     * @return array{0: string, 1: array<string, mixed>}
      */
-    public function process(string $filePath, array &$customProperties): string
+    public function process(string $filePath): array
     {
         if (! $this->isImagePath($filePath)) {
-            return $filePath;
+            return [$filePath, []];
         }
 
-        $this->extractDimensions($filePath, $customProperties);
+        $properties = $this->extractProperties($filePath);
 
         if (config('media.strip_exif', true)) {
-            return $this->stripExif($filePath);
+            $stripped = $this->stripExif($filePath);
+
+            return [$stripped, $properties];
         }
 
-        return $filePath;
+        return [$filePath, $properties];
     }
 
-    protected function extractDimensions(string $filePath, array &$customProperties): void
+    protected function extractProperties(string $filePath): array
     {
         $size = @getimagesize($filePath);
 
-        if ($size !== false) {
-            $customProperties['width'] = $size[0];
-            $customProperties['height'] = $size[1];
+        if ($size === false) {
+            return [];
         }
+
+        return [
+            'width'  => $size[0],
+            'height' => $size[1],
+        ];
     }
 
-    /**
-     * Re-encode the image through Intervention so EXIF is discarded.
-     * Returns a new temp file path.
-     */
     protected function stripExif(string $filePath): string
     {
         $manager = $this->buildImageManager();
