@@ -18,16 +18,19 @@ class FileAdder
 {
     protected UploadedFile|string $file;
 
-    /** 'upload' | 'url' | 'base64' */
+    /** 'upload' | 'url' | 'base64' | 'disk' */
     protected string $sourceType = 'upload';
 
     protected array $urlHeaders = [];
     protected string $base64MimeType = '';
+    protected string $sourceDisk = '';
 
     protected string $collection = 'default';
     protected string $customName = '';
     protected string $customFileName = '';
     protected array $customProperties = [];
+
+    protected bool $preservingOriginal = false;
 
     /** Temp files created during processing; all cleaned up after upload. */
     protected array $tempFiles = [];
@@ -60,6 +63,19 @@ class FileAdder
         return $this;
     }
 
+    /**
+     * Source is a file already stored on a Laravel disk (e.g. S3).
+     * The file is streamed to a temp location for processing.
+     */
+    public function setFileFromDisk(string $path, string $disk): static
+    {
+        $this->file = $path;
+        $this->sourceType = 'disk';
+        $this->sourceDisk = $disk;
+
+        return $this;
+    }
+
     public function usingName(string $name): static
     {
         $this->customName = $name;
@@ -81,6 +97,17 @@ class FileAdder
         return $this;
     }
 
+    /**
+     * When the source is a local file path, copy it instead of reading in-place.
+     * Useful when you need the original to remain untouched after upload.
+     */
+    public function preservingOriginal(): static
+    {
+        $this->preservingOriginal = true;
+
+        return $this;
+    }
+
     public function toMediaCollection(string $collection = 'default'): Media
     {
         $this->collection = $collection;
@@ -91,7 +118,22 @@ class FileAdder
             $this->subject->clearMediaCollection($collection);
         }
 
-        return $this->uploadAndCreate();
+        $media = $this->uploadAndCreate();
+
+        // onlyKeepLatest(n > 1): purge oldest files that exceed the limit
+        $limit = $this->getCollectionSizeLimit();
+        if ($limit > 1) {
+            $this->subject->media()
+                ->where('collection_name', $collection)
+                ->orderByDesc('order_column')
+                ->skip($limit)
+                ->get()
+                ->each->delete();
+
+            $this->subject->unsetRelation('media');
+        }
+
+        return $media;
     }
 
     protected function uploadAndCreate(): Media
@@ -105,10 +147,8 @@ class FileAdder
 
     protected function doUpload(): Media
     {
-        // Resolve a local file path we can read and process
         $sourcePath = $this->resolveSourcePath();
 
-        // Extract dimensions and optionally strip EXIF; may return a new temp path
         $processor = new ImageProcessor;
         $uploadPath = $processor->process($sourcePath, $this->customProperties);
 
@@ -116,11 +156,9 @@ class FileAdder
             $this->tempFiles[] = $uploadPath;
         }
 
-        // For URL and base64 sources, validate the actual MIME from file contents
-        // (guardAgainstCollectionConstraints runs before download, so this is the real check)
+        // For URL/base64/disk sources, validate actual MIME after download
         $this->guardAgainstActualMimeType($uploadPath);
 
-        // Deduplication: return existing record if the same file was already uploaded
         $hash = md5_file($uploadPath);
 
         if (config('media.deduplication', true)) {
@@ -134,12 +172,16 @@ class FileAdder
         [$fileName, $name, $mimeType, $size] = $this->resolveFileInfo($uploadPath);
         $safeFileName = $this->sanitizeFileName($fileName);
 
-        // Per-collection disk override takes priority over the global config
         $collectionDef = method_exists($this->subject, 'getMediaCollection')
             ? $this->subject->getMediaCollection($this->collection)
             : null;
 
         $disk = $collectionDef?->getDisk() ?? config('media.disk', 's3');
+
+        // Per-collection conversions disk takes priority over the global config
+        $conversionsDisk = $collectionDef?->getConversionsDisk()
+            ?? config('media.conversions_disk')
+            ?? $disk;
 
         /** @var PathGenerator $generator */
         $generator = app(config('media.path_generator', PathGenerator::class));
@@ -156,7 +198,7 @@ class FileAdder
         $media->file_name = $safeFileName;
         $media->mime_type = $mimeType;
         $media->disk = $disk;
-        $media->conversions_disk = config('media.conversions_disk') ?? $disk;
+        $media->conversions_disk = $conversionsDisk;
         $media->hash = $hash;
         $media->size = $size;
         $media->order_column = $this->getNextOrderColumn();
@@ -180,15 +222,12 @@ class FileAdder
         return $media;
     }
 
-    /**
-     * Resolve the source into a local temp file path for processing.
-     * The path is registered for cleanup.
-     */
     protected function resolveSourcePath(): string
     {
         return match ($this->sourceType) {
             'url'    => $this->downloadFromUrl(),
             'base64' => $this->decodeBase64(),
+            'disk'   => $this->downloadFromDisk(),
             default  => $this->resolveUploadPath(),
         };
     }
@@ -199,9 +238,16 @@ class FileAdder
             return $this->file->getPathname();
         }
 
-        // String path to a local file
         if (! file_exists($this->file)) {
             throw new InvalidArgumentException("File not found: {$this->file}");
+        }
+
+        if ($this->preservingOriginal) {
+            $tmpFile = tempnam(sys_get_temp_dir(), 'jurager_media_copy_');
+            $this->tempFiles[] = $tmpFile;
+            copy($this->file, $tmpFile);
+
+            return $tmpFile;
         }
 
         return $this->file;
@@ -234,7 +280,6 @@ class FileAdder
 
     protected function decodeBase64(): string
     {
-        // Strip data URI prefix if present: data:image/jpeg;base64,...
         $data = preg_replace('/^data:[^;]+;base64,/', '', $this->file);
         $content = base64_decode($data, strict: true);
 
@@ -245,6 +290,37 @@ class FileAdder
         $tmpFile = tempnam(sys_get_temp_dir(), 'jurager_media_b64_');
         $this->tempFiles[] = $tmpFile;
         file_put_contents($tmpFile, $content);
+
+        return $tmpFile;
+    }
+
+    protected function downloadFromDisk(): string
+    {
+        $tmpFile = tempnam(sys_get_temp_dir(), 'jurager_media_disk_');
+        $this->tempFiles[] = $tmpFile;
+
+        $stream = Storage::disk($this->sourceDisk)->readStream($this->file);
+
+        if ($stream === null) {
+            throw new RuntimeException(
+                "File [{$this->file}] not found on disk [{$this->sourceDisk}]."
+            );
+        }
+
+        $dest = fopen($tmpFile, 'wb');
+
+        try {
+            stream_copy_to_stream($stream, $dest);
+        } finally {
+            fclose($dest);
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+
+        if (! $this->customFileName) {
+            $this->customFileName = basename($this->file);
+        }
 
         return $tmpFile;
     }
@@ -283,7 +359,6 @@ class FileAdder
             return;
         }
 
-        // Skip if the collection explicitly opted out of conversions
         $collectionDef = method_exists($this->subject, 'getMediaCollection')
             ? $this->subject->getMediaCollection($this->collection)
             : null;
@@ -301,7 +376,7 @@ class FileAdder
             return;
         }
 
-        $sync = array_values(array_filter($all, fn ($c) => ! $c->isQueued()));
+        $sync  = array_values(array_filter($all, fn ($c) => ! $c->isQueued()));
         $async = array_values(array_filter($all, fn ($c) => $c->isQueued()));
 
         if (! empty($sync)) {
@@ -309,7 +384,6 @@ class FileAdder
         }
 
         if (! empty($async)) {
-            // Group by queue name so conversions with different priorities run on correct queues
             collect($async)
                 ->groupBy(fn ($c) => $c->getQueue())
                 ->each(function ($group, string $queue) use ($media): void {
@@ -356,6 +430,24 @@ class FileAdder
         });
     }
 
+    protected function isSingleFileCollection(): bool
+    {
+        if (! method_exists($this->subject, 'getMediaCollection')) {
+            return false;
+        }
+
+        return $this->subject->getMediaCollection($this->collection)?->isSingleFile() ?? false;
+    }
+
+    protected function getCollectionSizeLimit(): int
+    {
+        if (! method_exists($this->subject, 'getMediaCollection')) {
+            return 0;
+        }
+
+        return $this->subject->getMediaCollection($this->collection)?->getCollectionSizeLimit() ?? 0;
+    }
+
     protected function guardAgainstSsrf(string $url): void
     {
         $allowed = config('media.allowed_domains', []);
@@ -376,7 +468,6 @@ class FileAdder
 
     protected function guardAgainstActualMimeType(string $uploadPath): void
     {
-        // For UploadedFile, the MIME was already checked before download — skip
         if ($this->file instanceof UploadedFile) {
             return;
         }
@@ -419,7 +510,7 @@ class FileAdder
             return;
         }
 
-        // MIME check for UploadedFile only — URL/base64 are checked post-download via guardAgainstActualMimeType()
+        // MIME check for UploadedFile only — URL/base64/disk validated post-download
         $allowed = $collection->getAllowedMimeTypes();
 
         if (! empty($allowed) && $this->file instanceof UploadedFile) {
@@ -443,15 +534,17 @@ class FileAdder
                 );
             }
         }
-    }
 
-    protected function isSingleFileCollection(): bool
-    {
-        if (! method_exists($this->subject, 'getMediaCollection')) {
-            return false;
+        // Custom acceptsFile callable — runs after built-in checks
+        $acceptor = $collection->getFileAcceptor();
+
+        if ($acceptor !== null && $this->file instanceof UploadedFile) {
+            if (! $acceptor($this->file, $collection)) {
+                throw new InvalidArgumentException(
+                    "The uploaded file was rejected by the custom validator for collection [{$this->collection}]."
+                );
+            }
         }
-
-        return $this->subject->getMediaCollection($this->collection)?->isSingleFile() ?? false;
     }
 
     protected function cleanupTempFiles(): void

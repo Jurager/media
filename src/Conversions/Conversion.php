@@ -2,8 +2,12 @@
 
 namespace Jurager\Media\Conversions;
 
+use Illuminate\Support\Traits\Conditionable;
+
 class Conversion
 {
+    use Conditionable;
+
     protected int $width = 0;
     protected int $height = 0;
     protected string $fitMethod = 'scale'; // scale | cover | contain
@@ -29,6 +33,9 @@ class Conversion
         return $this;
     }
 
+    /**
+     * Resize to exact dimensions, cropping to cover the bounding box.
+     */
     public function fit(int $width, int $height): static
     {
         $this->width = $width;
@@ -38,6 +45,9 @@ class Conversion
         return $this;
     }
 
+    /**
+     * Resize to fit within the bounding box without cropping.
+     */
     public function contain(int $width, int $height): static
     {
         $this->width = $width;
@@ -61,6 +71,9 @@ class Conversion
         return $this;
     }
 
+    /**
+     * Run this conversion synchronously instead of queuing it.
+     */
     public function nonQueued(): static
     {
         $this->queued = false;
@@ -69,7 +82,7 @@ class Conversion
     }
 
     /**
-     * Dispatch this conversion to a specific queue instead of the default one.
+     * Dispatch to a specific queue name instead of the default media queue.
      * Has no effect when combined with nonQueued().
      */
     public function onQueue(string $queue): static
@@ -79,6 +92,10 @@ class Conversion
         return $this;
     }
 
+    /**
+     * Limit this conversion to specific collection(s).
+     * When not called, the conversion runs for every collection.
+     */
     public function performOnCollections(string ...$collections): static
     {
         $this->collections = $collections;

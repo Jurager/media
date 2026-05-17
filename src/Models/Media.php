@@ -3,15 +3,17 @@
 namespace Jurager\Media\Models;
 
 use DateTimeInterface;
+use Illuminate\Contracts\Mail\Attachable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Mail\Attachment;
 use Illuminate\Support\Facades\Storage;
 use Jurager\Media\Events\MediaAdded;
 use Jurager\Media\Events\MediaDeleted;
 use Jurager\Media\Support\PathGenerator;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-class Media extends Model
+class Media extends Model implements Attachable
 {
     protected $fillable = [
         'mediable_type',
@@ -32,11 +34,11 @@ class Media extends Model
     ];
 
     protected $casts = [
-        'custom_properties' => 'array',
+        'custom_properties'    => 'array',
         'generated_conversions' => 'array',
-        'manipulations' => 'array',
-        'size' => 'integer',
-        'order_column' => 'integer',
+        'manipulations'        => 'array',
+        'size'                 => 'integer',
+        'order_column'         => 'integer',
     ];
 
     public function mediable(): MorphTo
@@ -62,7 +64,7 @@ class Media extends Model
     }
 
     /**
-     * Presigned S3 URL for private files. Only works with S3-compatible disks.
+     * Presigned S3 URL for private files.
      */
     public function getTemporaryUrl(DateTimeInterface $expiration, array $options = []): string
     {
@@ -88,6 +90,25 @@ class Media extends Model
             $expiration,
             $options,
         );
+    }
+
+    // ─── Mail ────────────────────────────────────────────────────────────────
+
+    /**
+     * Implement Laravel's Attachable interface so Media can be passed directly
+     * to Mailable::attachments() without wrapping.
+     *
+     * Usage in a Mailable:
+     *   public function attachments(): array
+     *   {
+     *       return [$this->invoice->getFirstMedia('pdf')];
+     *   }
+     */
+    public function toMailAttachment(): Attachment
+    {
+        return Attachment::fromStorageDisk($this->disk, $this->getPath())
+            ->as($this->file_name)
+            ->withMime($this->mime_type ?? 'application/octet-stream');
     }
 
     // ─── Response helpers ────────────────────────────────────────────────────
@@ -186,10 +207,7 @@ class Media extends Model
     // ─── Conversion status ───────────────────────────────────────────────────
 
     /**
-     * Return the names of conversions that are registered on the mediable model
-     * but have not been generated yet.
-     *
-     * Requires the mediable relation to be loaded (or will trigger a query).
+     * Names of conversions registered on the mediable model but not yet generated.
      *
      * @return string[]
      */
@@ -211,9 +229,6 @@ class Media extends Model
             ->all();
     }
 
-    /**
-     * Determine whether a specific conversion is still waiting to be generated.
-     */
     public function isConversionPending(string $name): bool
     {
         return in_array($name, $this->pendingConversions(), true);
@@ -237,11 +252,9 @@ class Media extends Model
 
     /**
      * Fake the media disk(s) for testing.
-     * Pass additional disk names for per-collection disks defined with ->disk().
      *
      *   Media::fake();
      *   Media::fake(['s3-private']);
-     *   $product->addMedia(UploadedFile::fake()->image('test.jpg'))->toMediaCollection('gallery');
      */
     public static function fake(array $additionalDisks = []): void
     {

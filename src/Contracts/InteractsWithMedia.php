@@ -19,9 +19,15 @@ interface InteractsWithMedia
 
     public function addMediaFromBase64(string $base64, string $mimeType = ''): FileAdder;
 
+    public function addMediaFromDisk(string $path, string $disk): FileAdder;
+
     // ─── Copying ─────────────────────────────────────────────────────────────
 
     public function copyMediaFrom(object $source, string|array|null $collections = null): void;
+
+    // ─── Scopes ──────────────────────────────────────────────────────────────
+
+    public function scopeWithMedia(Builder $query, string|array|null $collections = null): Builder;
 
     // ─── Retrieval ───────────────────────────────────────────────────────────
 
@@ -29,7 +35,11 @@ interface InteractsWithMedia
 
     public function getFirstMedia(string $collection = 'default'): ?Media;
 
+    public function getLastMedia(string $collection = 'default'): ?Media;
+
     public function getFirstMediaUrl(string $collection = 'default', string $conversion = ''): string;
+
+    public function getLastMediaUrl(string $collection = 'default', string $conversion = ''): string;
 
     public function hasMedia(string $collection = 'default'): bool;
 
@@ -40,6 +50,8 @@ interface InteractsWithMedia
     // ─── Cleanup ─────────────────────────────────────────────────────────────
 
     public function clearMediaCollection(string $collection = 'default'): static;
+
+    public function clearMediaCollectionExcept(string $collection = 'default', Media|iterable $except = []): static;
 
     // ─── Conversions & Collections ───────────────────────────────────────────
 

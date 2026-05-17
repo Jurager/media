@@ -45,7 +45,6 @@ trait HasMedia
             }
 
             // For models using SoftDeletes, only clean up on permanent (force) deletion.
-            // Soft-deleting a product should not remove its images.
             if (in_array(SoftDeletes::class, class_uses_recursive($model), true) && ! $model->isForceDeleting()) {
                 return;
             }
@@ -71,7 +70,6 @@ trait HasMedia
 
     /**
      * Download a file from a remote URL and attach it as media.
-     * Uses Guzzle streaming (sink) — the file is never fully loaded into memory.
      *
      * @param  array<string, string>  $headers
      */
@@ -89,12 +87,21 @@ trait HasMedia
         return (new FileAdder($this))->setFileFromBase64($base64, $mimeType);
     }
 
+    /**
+     * Copy a file from an existing storage disk and attach it as media.
+     * Useful for importing files already on S3 without downloading them locally first.
+     *
+     * Example: $product->addMediaFromDisk('exports/logo.png', 's3-archive')->toMediaCollection('images');
+     */
+    public function addMediaFromDisk(string $path, string $disk): FileAdder
+    {
+        return (new FileAdder($this))->setFileFromDisk($path, $disk);
+    }
+
     // ─── Copying ─────────────────────────────────────────────────────────────
 
     /**
      * Copy media from another model using S3 server-side copy.
-     * No files are downloaded or re-uploaded — AWS copies them within the same region instantly.
-     * Each copy is an independent object; deleting one does not affect the other.
      *
      * @param  string|string[]|null  $collections  Collection name(s) to copy; null copies all.
      */
@@ -126,13 +133,11 @@ trait HasMedia
         $copy->generated_conversions = [];
         $copy->save();
 
-        // S3 server-side copy: no bandwidth, no download, instant within AWS
         Storage::disk($original->disk)->copy(
             $generator->getPath($original) . $original->file_name,
             $generator->getPath($copy) . $copy->file_name,
         );
 
-        // Copy any already-generated conversions the same way
         $generatedConversions = [];
         $convDisk = $original->conversions_disk ?? $original->disk;
 
@@ -174,10 +179,7 @@ trait HasMedia
     // ─── Scopes ──────────────────────────────────────────────────────────────
 
     /**
-     * Eager-load the media relation to avoid N+1 queries when iterating models.
-     *
-     * When $collections is given, only those collections are loaded.
-     * Accessing other collections afterwards will trigger individual queries.
+     * Eager-load the media relation to avoid N+1 queries.
      *
      * @param  string|string[]|null  $collections
      */
@@ -206,13 +208,29 @@ trait HasMedia
         return $this->getMedia($collection)->first();
     }
 
+    public function getLastMedia(string $collection = 'default'): ?Media
+    {
+        return $this->getMedia($collection)->last();
+    }
+
     /**
      * Return the URL for the first item in a collection.
-     * Falls back to the original when the conversion is still pending.
+     * Falls back to the collection's useFallbackUrl() when no media exists.
      */
     public function getFirstMediaUrl(string $collection = 'default', string $conversion = ''): string
     {
-        return $this->getFirstMedia($collection)?->getUrl($conversion) ?? '';
+        $media = $this->getFirstMedia($collection);
+
+        if ($media !== null) {
+            return $media->getUrl($conversion);
+        }
+
+        return $this->getMediaCollection($collection)?->getFallbackUrl($conversion) ?? '';
+    }
+
+    public function getLastMediaUrl(string $collection = 'default', string $conversion = ''): string
+    {
+        return $this->getLastMedia($collection)?->getUrl($conversion) ?? '';
     }
 
     public function hasMedia(string $collection = 'default'): bool
@@ -250,6 +268,28 @@ trait HasMedia
     public function clearMediaCollection(string $collection = 'default'): static
     {
         $this->getMedia($collection)->each->delete();
+        $this->unsetRelation('media');
+
+        return $this;
+    }
+
+    /**
+     * Delete all media in a collection except the given item(s).
+     *
+     * @param  Media|iterable<Media>  $except
+     */
+    public function clearMediaCollectionExcept(string $collection = 'default', Media|iterable $except = []): static
+    {
+        if ($except instanceof Media) {
+            $except = [$except];
+        }
+
+        $exceptIds = collect($except)->map(fn (Media $m) => $m->getKey())->all();
+
+        $this->getMedia($collection)
+            ->reject(fn (Media $m) => in_array($m->getKey(), $exceptIds, true))
+            ->each->delete();
+
         $this->unsetRelation('media');
 
         return $this;
@@ -299,10 +339,6 @@ trait HasMedia
 
     // ─── Test assertions ─────────────────────────────────────────────────────
 
-    /**
-     * Assert the collection contains media (and optionally a specific count).
-     * Uses PHPUnit\Framework\Assert — call only from test code.
-     */
     public function assertHasMedia(string $collection = 'default', ?int $count = null): void
     {
         $media = $this->getMedia($collection);
@@ -321,9 +357,6 @@ trait HasMedia
         }
     }
 
-    /**
-     * Assert the collection is empty.
-     */
     public function assertHasNoMedia(string $collection = 'default'): void
     {
         $media = $this->getMedia($collection);
@@ -334,9 +367,6 @@ trait HasMedia
         );
     }
 
-    /**
-     * Assert the collection contains exactly the given number of items.
-     */
     public function assertMediaCount(string $collection, int $count): void
     {
         $media = $this->getMedia($collection);
