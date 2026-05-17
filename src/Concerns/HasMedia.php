@@ -330,6 +330,36 @@ trait HasMedia
         return $this->mediaConversions;
     }
 
+    /**
+     * Return the conversions that apply to a specific collection.
+     *
+     * If the collection was registered with withConversions() callbacks, those take priority —
+     * their conversions are returned without consulting registerMediaConversions() at all.
+     * Otherwise falls back to registerMediaConversions() filtered by performOnCollections().
+     *
+     * @return Conversion[]
+     */
+    public function getConversionsForCollection(string $collectionName): array
+    {
+        $collection = $this->getMediaCollection($collectionName);
+        $callbacks  = $collection?->getConversionCallbacks() ?? [];
+
+        if (! empty($callbacks)) {
+            $this->mediaConversions = [];
+
+            foreach ($callbacks as $callback) {
+                $callback(new Media);
+            }
+
+            return $this->mediaConversions;
+        }
+
+        return array_values(array_filter(
+            $this->getRegisteredMediaConversions(),
+            fn (Conversion $c) => $c->shouldBePerformedOn($collectionName),
+        ));
+    }
+
     public function getMediaCollection(string $name): ?MediaCollection
     {
         if (! $this->mediaCollectionsRegistered) {

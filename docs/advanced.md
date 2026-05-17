@@ -220,7 +220,7 @@ Run this periodically (e.g. nightly cron) to prevent S3 cost accumulation from o
 
 ### `media:regenerate`
 
-Regenerates image conversions for existing records. Useful after adding new conversion sizes or changing parameters.
+Regenerates conversions for existing media records. Works for any file type — images, PDFs, or custom converters. Useful after adding new conversion sizes, changing parameters, or registering a new converter for an existing collection.
 
 ```bash
 # One model

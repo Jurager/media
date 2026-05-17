@@ -34,7 +34,7 @@ class MediaRegenerateCommand extends Command
             return self::FAILURE;
         }
 
-        $query = $mediaClass::query()->whereRaw("mime_type LIKE 'image/%'");
+        $query = $mediaClass::query();
 
         if ($modelClass) {
             $query->where('mediable_type', (new $modelClass)->getMorphClass());
@@ -108,13 +108,10 @@ class MediaRegenerateCommand extends Command
     {
         $mediable = $media->mediable;
 
-        if (! $mediable || ! method_exists($mediable, 'getRegisteredMediaConversions')) {
+        if (! $mediable || ! method_exists($mediable, 'getConversionsForCollection')) {
             return [];
         }
 
-        return array_values(array_filter(
-            $mediable->getRegisteredMediaConversions(),
-            fn ($c) => $c->shouldBePerformedOn($media->collection_name),
-        ));
+        return $mediable->getConversionsForCollection($media->collection_name);
     }
 }

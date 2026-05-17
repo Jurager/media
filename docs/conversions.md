@@ -11,33 +11,63 @@ Which file types can be converted depends on the registered converters (see [Plu
 
 ## Defining conversions
 
-Override `registerMediaConversions()` on your model. Conversions are registered with `addMediaConversion()`:
+The recommended approach is `withConversions()` on the collection — conversions are defined where the collection is, and there is no need for `performOnCollections()`:
+
+```php
+public function registerMediaCollections(): void
+{
+    $this->addMediaCollection('gallery')
+        ->withConversions(function (Media $media): void {
+            $this->addMediaConversion('thumb')->fit(200, 200)->format('webp')->quality(85)->nonQueued();
+            $this->addMediaConversion('medium')->width(800)->quality(80);
+        });
+
+    $this->addMediaCollection('documents')
+        ->acceptsMimeTypes(['application/pdf'])
+        ->withConversions(function (Media $media): void {
+            // PDF first-page preview — requires ext-imagick + Ghostscript on the server
+            $this->addMediaConversion('preview')->width(800)->format('jpg')->quality(85);
+        });
+}
+```
+
+Multiple `withConversions()` calls on the same collection are additive. This is useful for sharing a common set of conversions across collections:
+
+```php
+$baseConversions = function (Media $media): void {
+    $this->addMediaConversion('thumb')->fit(200, 200)->format('webp')->quality(85)->nonQueued();
+    $this->addMediaConversion('medium')->width(800)->format('webp')->quality(80);
+};
+
+$this->addMediaCollection('image')
+    ->withConversions($baseConversions)
+    ->withConversions(function (Media $media): void {
+        $this->addMediaConversion('large')->width(1600)->quality(85);
+    });
+
+$this->addMediaCollection('gallery')
+    ->withConversions($baseConversions); // thumb + medium, no large
+```
+
+### Global conversions (legacy)
+
+You can also override `registerMediaConversions()` on your model and use `performOnCollections()` to scope each conversion. This approach works but requires the conversion list and the collection list to stay in sync manually:
 
 ```php
 public function registerMediaConversions(Media $media): void
 {
-    // 200×200 crop, converted to WebP — good for listing thumbnails
     $this->addMediaConversion('thumb')
         ->fit(200, 200)
         ->format('webp')
-        ->quality(85);
+        ->performOnCollections('image', 'gallery');
 
-    // Scale to 800 px wide, keep aspect ratio
-    $this->addMediaConversion('medium')
-        ->width(800)
-        ->quality(80);
-
-    // Large version, generated synchronously (not queued)
     $this->addMediaConversion('large')
         ->width(1600)
-        ->nonQueued();
-
-    // Only generate this conversion for the gallery collection
-    $this->addMediaConversion('square')
-        ->fit(400, 400)
-        ->performOnCollections('gallery', 'slider');
+        ->performOnCollections('image');
 }
 ```
+
+When a collection has `withConversions()` callbacks registered, `registerMediaConversions()` is **not** consulted for that collection — the callbacks take full priority.
 
 ## Fit modes
 

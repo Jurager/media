@@ -20,17 +20,25 @@ class Product extends Model implements InteractsWithMedia
 
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection('image')->singleFile();
-        $this->addMediaCollection('gallery');
+        $this->addMediaCollection('image')
+            ->singleFile()
+            ->withConversions(function (Media $media): void {
+                $this->addMediaConversion('thumb')->fit(200, 200)->format('webp')->quality(85)->nonQueued();
+                $this->addMediaConversion('medium')->width(800)->quality(80);
+            });
+
+        $this->addMediaCollection('gallery')
+            ->withConversions(function (Media $media): void {
+                $this->addMediaConversion('thumb')->fit(200, 200)->format('webp')->quality(85)->nonQueued();
+                $this->addMediaConversion('medium')->width(800)->quality(80);
+            });
+
         $this->addMediaCollection('documents')
             ->acceptsMimeTypes(['application/pdf'])
-            ->maxFileSize(20 * 1024 * 1024);
-    }
-
-    public function registerMediaConversions(Media $media): void
-    {
-        $this->addMediaConversion('thumb')->fit(200, 200)->format('webp')->quality(85);
-        $this->addMediaConversion('medium')->width(800)->quality(80);
+            ->maxFileSize(20 * 1024 * 1024)
+            ->withConversions(function (Media $media): void {
+                $this->addMediaConversion('preview')->width(800)->format('jpg')->quality(85);
+            });
     }
 }
 ```

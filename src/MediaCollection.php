@@ -22,6 +22,9 @@ class MediaCollection
     /** @var callable|null */
     protected $fileAcceptor = null;
 
+    /** @var callable[] */
+    protected array $conversionCallbacks = [];
+
     public function __construct(public readonly string $name) {}
 
     /**
@@ -104,8 +107,27 @@ class MediaCollection
     }
 
     /**
+     * Register conversions that apply only to this collection.
+     * The callback receives a Media instance and calls $this->addMediaConversion() normally.
+     * Multiple calls are additive — all callbacks are executed in order.
+     *
+     * When a collection has at least one withConversions() callback, those take priority
+     * and registerMediaConversions() + performOnCollections() are not consulted for it.
+     *
+     * Example:
+     *   ->withConversions(function (Media $media): void {
+     *       $this->addMediaConversion('thumb')->fit(200, 200)->format('webp');
+     *   })
+     */
+    public function withConversions(callable $callback): static
+    {
+        $this->conversionCallbacks[] = $callback;
+
+        return $this;
+    }
+
+    /**
      * Disable automatic conversion dispatch for this collection.
-     * Use for non-image collections (PDFs, documents) to skip useless jobs.
      */
     public function withoutConversions(): static
     {
@@ -165,5 +187,11 @@ class MediaCollection
     public function getFallbackPath(string $conversion = ''): ?string
     {
         return $this->fallbackPaths[$conversion] ?? $this->fallbackPaths['default'] ?? null;
+    }
+
+    /** @return callable[] */
+    public function getConversionCallbacks(): array
+    {
+        return $this->conversionCallbacks;
     }
 }

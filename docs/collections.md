@@ -11,25 +11,56 @@ Collections are optional. If you call `toMediaCollection('gallery')` without def
 
 ## Defining collections
 
-Override `registerMediaCollections()` on your model:
+Override `registerMediaCollections()` on your model. Use `withConversions()` to attach conversions directly to the collection that needs them — no need for a separate `registerMediaConversions()` method or `performOnCollections()` calls:
 
 ```php
 public function registerMediaCollections(): void
 {
     // Single main image — new upload replaces the previous one
-    $this->addMediaCollection('image')->singleFile();
+    $this->addMediaCollection('image')
+        ->singleFile()
+        ->withConversions(function (Media $media): void {
+            $this->addMediaConversion('thumb')->fit(200, 200)->format('webp')->quality(85)->nonQueued();
+            $this->addMediaConversion('medium')->width(800)->quality(80);
+        });
 
-    // Unlimited photos
-    $this->addMediaCollection('gallery');
+    // Unlimited photos with the same conversions
+    $this->addMediaCollection('gallery')
+        ->withConversions(function (Media $media): void {
+            $this->addMediaConversion('thumb')->fit(200, 200)->format('webp')->quality(85)->nonQueued();
+            $this->addMediaConversion('medium')->width(800)->quality(80);
+        });
 
-    // PDF-only, 20 MB max
+    // PDF-only, 20 MB max, with a first-page preview conversion
     $this->addMediaCollection('documents')
         ->acceptsMimeTypes(['application/pdf'])
-        ->maxFileSize(20 * 1024 * 1024);
+        ->maxFileSize(20 * 1024 * 1024)
+        ->withConversions(function (Media $media): void {
+            $this->addMediaConversion('preview')->width(800)->format('jpg')->quality(85);
+        });
 
-    // Slider images
+    // Slider images — no conversions needed here
     $this->addMediaCollection('slider');
 }
+```
+
+Multiple `withConversions()` calls on the same collection are additive. Share a common closure to avoid duplication:
+
+```php
+$baseConversions = function (Media $media): void {
+    $this->addMediaConversion('thumb')->fit(200, 200)->format('webp')->quality(85)->nonQueued();
+    $this->addMediaConversion('medium')->width(800)->format('webp')->quality(80);
+};
+
+$this->addMediaCollection('image')
+    ->singleFile()
+    ->withConversions($baseConversions)
+    ->withConversions(function (Media $media): void {
+        $this->addMediaConversion('large')->width(1600)->quality(85);
+    });
+
+$this->addMediaCollection('gallery')
+    ->withConversions($baseConversions); // thumb + medium only
 ```
 
 ## Constraints
@@ -82,15 +113,12 @@ Each disk must be configured in `config/filesystems.php`. Conversions are stored
 
 ### Disable conversions for a collection
 
-Non-image collections (PDFs, documents) don't need image conversion jobs. Mark them explicitly to avoid dispatching a job that would immediately return:
+If a collection has no `withConversions()` callbacks and no matching entries in `registerMediaConversions()`, no conversion job is dispatched — nothing to configure. Call `withoutConversions()` explicitly only when you want to suppress conversions even if global `registerMediaConversions()` would otherwise match the collection:
 
 ```php
-$this->addMediaCollection('documents')
-    ->acceptsMimeTypes(['application/pdf'])
+$this->addMediaCollection('originals')
     ->withoutConversions();
 ```
-
-Without this flag, uploading a PDF still dispatches `PerformConversionsJob` which checks `$media->isImage()` and exits — harmless, but wasteful.
 
 ---
 

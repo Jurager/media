@@ -331,7 +331,7 @@ class FileAdder
 
     protected function dispatchConversions(Media $media, mixed $collectionDef): void
     {
-        if (! method_exists($this->subject, 'getRegisteredMediaConversions')) {
+        if (! method_exists($this->subject, 'getConversionsForCollection')) {
             return;
         }
 
@@ -339,10 +339,7 @@ class FileAdder
             return;
         }
 
-        $all = array_filter(
-            $this->subject->getRegisteredMediaConversions(),
-            fn ($c) => $c->shouldBePerformedOn($this->collection),
-        );
+        $all = $this->subject->getConversionsForCollection($this->collection);
 
         if (empty($all)) {
             return;
