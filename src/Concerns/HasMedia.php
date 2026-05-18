@@ -368,10 +368,34 @@ trait HasMedia
             $this->mediaCollectionsRegistered = true;
         }
 
-        return $this->mediaCollections[$name] ?? null;
+        if (isset($this->mediaCollections[$name])) {
+            return $this->mediaCollections[$name];
+        }
+
+        $dynamic = $this->resolveDynamicMediaCollection($name);
+
+        if ($dynamic !== null) {
+            $this->mediaCollections[$name] = $dynamic;
+        }
+
+        return $dynamic;
     }
 
-    // â”€â”€â”€ Test assertions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    /**
+     * Fallback hook for resolving a media collection that was not statically
+     * registered in registerMediaCollections().
+     *
+     * Models can override this to construct collections on demand — for example,
+     * a model with a dynamic attribute schema can derive a MediaCollection from
+     * an external definition (config, database, etc.).
+     *
+     * Returning null falls through to the default behavior (collection not found).
+     */
+    protected function resolveDynamicMediaCollection(string $name): ?MediaCollection
+    {
+        return null;
+    }
+
 
     public function assertHasMedia(string $collection = 'default', ?int $count = null): void
     {
