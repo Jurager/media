@@ -20,7 +20,7 @@ return new class extends Migration
             $table->unsignedBigInteger('size');
             $table->unsignedInteger('order_column')->nullable()->index();
             $table->string('hash', 32)->nullable()->index();
-            $table->json('properties')->nullable();
+            $table->jsonb('properties')->nullable();
             $table->timestamps();
 
             $table->index(['mediable_type', 'mediable_id', 'collection_name'], 'media_mediable_collection_index');

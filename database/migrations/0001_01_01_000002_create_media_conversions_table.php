@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('disk');
             $table->string('extension')->nullable();
             $table->unsignedBigInteger('size')->nullable();
-            $table->json('properties')->nullable();  // width, height for images; pages for PDF; etc.
+            $table->jsonb('properties')->nullable();  // width, height for images; pages for PDF; etc.
             $table->text('error_message')->nullable();
             $table->timestamp('completed_at')->nullable();
             $table->timestamps();
