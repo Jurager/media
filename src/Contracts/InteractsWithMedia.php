@@ -3,6 +3,7 @@
 namespace Jurager\Media\Contracts;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Jurager\Media\Conversions\Conversion;
 use Jurager\Media\MediaCollection;
@@ -11,9 +12,7 @@ use Jurager\Media\Support\FileAdder;
 
 interface InteractsWithMedia
 {
-    // â”€â”€â”€ Uploading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    public function addMedia(mixed $file): FileAdder;
+    public function addMedia(UploadedFile|string $file): FileAdder;
 
     public function addMediaFromUrl(string $url, array $headers = []): FileAdder;
 

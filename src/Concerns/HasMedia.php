@@ -61,8 +61,6 @@ trait HasMedia
         return $this->morphMany($mediaClass, 'mediable')->orderBy('order_column');
     }
 
-    // â”€â”€â”€ Uploading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
     public function addMedia(UploadedFile|string $file): FileAdder
     {
         return (new FileAdder($this))->setFile($file);
