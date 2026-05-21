@@ -1,4 +1,7 @@
-<?php
+<?php /** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
 
 namespace Jurager\Media\Support;
 

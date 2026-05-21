@@ -1,4 +1,8 @@
-<?php
+<?php /** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
 
 namespace Jurager\Media\Jobs;
 
@@ -34,7 +38,7 @@ class PerformConversionsJob implements ShouldQueue, ShouldBeUnique
 
     public function uniqueId(): string
     {
-        $names = implode('_', array_map(fn (Conversion $c) => $c->name, $this->conversions));
+        $names = implode('_', array_map(static fn (Conversion $c) => $c->name, $this->conversions));
 
         return "media_{$this->media->id}_{$names}";
     }
@@ -49,10 +53,13 @@ class PerformConversionsJob implements ShouldQueue, ShouldBeUnique
         return [30, 60, 120];
     }
 
+    /**
+     * @throws \Throwable
+     */
     public function handle(): void
     {
         $mediaConversionClass = config('media.models.media_conversion', MediaConversion::class);
-        $names = array_map(fn (Conversion $c) => $c->name, $this->conversions);
+        $names = array_map(static fn (Conversion $c) => $c->name, $this->conversions);
 
         // Mark conversions as processing (also covers retries which have status=failed)
         $mediaConversionClass::where('media_id', $this->media->id)
@@ -60,7 +67,7 @@ class PerformConversionsJob implements ShouldQueue, ShouldBeUnique
             ->whereIn('status', ['pending', 'failed'])
             ->update(['status' => 'processing', 'error_message' => null]);
 
-        // Pre-load conversion records so each iteration doesn't query individually
+        // Preload conversion records so each iteration doesn't query individually
         $conversionRecords = $mediaConversionClass::where('media_id', $this->media->id)
             ->whereIn('name', $names)
             ->get()

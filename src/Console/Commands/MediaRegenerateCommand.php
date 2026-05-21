@@ -1,4 +1,7 @@
-<?php
+<?php /** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
 
 namespace Jurager\Media\Console\Commands;
 
@@ -67,7 +70,7 @@ class MediaRegenerateCommand extends Command
                     continue;
                 }
 
-                $names = array_map(fn ($c) => $c->name, $conversions);
+                $names = array_map(static fn ($c) => $c->name, $conversions);
 
                 // Reset existing records to pending (upsert so new conversions also get created)
                 foreach ($conversions as $conversion) {

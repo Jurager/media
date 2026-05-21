@@ -1,4 +1,10 @@
-<?php
+<?php /** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
 
 namespace Jurager\Media\Concerns;
 
@@ -16,6 +22,7 @@ use Jurager\Media\MediaCollection;
 use Jurager\Media\Models\Media;
 use Jurager\Media\Support\FileAdder;
 use Jurager\Media\Support\PathGenerator;
+use Throwable;
 
 trait HasMedia
 {
@@ -39,7 +46,7 @@ trait HasMedia
      */
     public static function bootHasMedia(): void
     {
-        static::deleting(function (self $model): void {
+        static::deleting(static function (self $model): void {
             if (! $model->deleteMediaOnDelete) {
                 return;
             }
@@ -63,7 +70,7 @@ trait HasMedia
 
     public function addMedia(UploadedFile|string $file): FileAdder
     {
-        return (new FileAdder($this))->setFile($file);
+        return new FileAdder($this)->setFile($file);
     }
 
     /**
@@ -73,7 +80,7 @@ trait HasMedia
      */
     public function addMediaFromUrl(string $url, array $headers = []): FileAdder
     {
-        return (new FileAdder($this))->setFileFromUrl($url, $headers);
+        return new FileAdder($this)->setFileFromUrl($url, $headers);
     }
 
     /**
@@ -82,7 +89,7 @@ trait HasMedia
      */
     public function addMediaFromBase64(string $base64, string $mimeType = ''): FileAdder
     {
-        return (new FileAdder($this))->setFileFromBase64($base64, $mimeType);
+        return new FileAdder($this)->setFileFromBase64($base64, $mimeType);
     }
 
     /**
@@ -93,15 +100,15 @@ trait HasMedia
      */
     public function addMediaFromDisk(string $path, string $disk): FileAdder
     {
-        return (new FileAdder($this))->setFileFromDisk($path, $disk);
+        return new FileAdder($this)->setFileFromDisk($path, $disk);
     }
-
-    // â”€â”€â”€ Copying â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Copy media from another model using S3 server-side copy.
      *
-     * @param  string|string[]|null  $collections  Collection name(s) to copy; null copies all.
+     * @param object $source
+     * @param string|string[]|null $collections Collection name(s) to copy; null copies all.
+     * @throws Throwable
      */
     public function copyMediaFrom(object $source, string|array|null $collections = null): void
     {
@@ -118,6 +125,9 @@ trait HasMedia
         $query->get()->each(fn (Media $media) => $this->copyMediaRecord($media));
     }
 
+    /**
+     * @throws Throwable
+     */
     protected function copyMediaRecord(Media $original): Media
     {
         /** @var PathGenerator $generator */
@@ -162,6 +172,9 @@ trait HasMedia
         return $copy;
     }
 
+    /**
+     * @throws Throwable
+     */
     protected function nextOrderColumnFor(string $collection): int
     {
         $mediaClass = config('media.models.media', Media::class);
@@ -178,8 +191,6 @@ trait HasMedia
         });
     }
 
-    // â”€â”€â”€ Scopes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
     /**
      * Eager-load the media relation to avoid N+1 queries.
      *
@@ -193,8 +204,6 @@ trait HasMedia
 
         return $query->with(['media' => fn ($q) => $q->whereIn('collection_name', (array) $collections)]);
     }
-
-    // â”€â”€â”€ Retrieval â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function getMedia(string $collection = 'default'): Collection
     {
@@ -240,12 +249,11 @@ trait HasMedia
         return $this->getMedia($collection)->isNotEmpty();
     }
 
-    // â”€â”€â”€ Ordering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
     /**
      * Reorder media within a collection by providing Media IDs in the desired order.
      *
-     * @param  array<int>  $orderedIds
+     * @param array<int> $orderedIds
+     * @throws Throwable
      */
     public function reorderMedia(string $collection, array $orderedIds): void
     {
@@ -265,8 +273,6 @@ trait HasMedia
         $this->unsetRelation('media');
     }
 
-    // â”€â”€â”€ Cleanup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
     public function clearMediaCollection(string $collection = 'default'): static
     {
         $this->getMedia($collection)->each->delete();
@@ -278,7 +284,9 @@ trait HasMedia
     /**
      * Delete all media in a collection except the given item(s).
      *
-     * @param  Media|iterable<Media>  $except
+     * @param string $collection
+     * @param Media|iterable $except
+     * @return HasMedia
      */
     public function clearMediaCollectionExcept(string $collection = 'default', Media|iterable $except = []): static
     {
@@ -296,8 +304,6 @@ trait HasMedia
 
         return $this;
     }
-
-    // â”€â”€â”€ Conversions & Collections â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function registerMediaConversions(Media $media): void {}
 
@@ -333,7 +339,7 @@ trait HasMedia
      *
      * If the collection was registered with withConversions() callbacks, those take priority —
      * their conversions are returned without consulting registerMediaConversions() at all.
-     * Otherwise falls back to registerMediaConversions() filtered by performOnCollections().
+     * Otherwise, falls back to registerMediaConversions() filtered by performOnCollections().
      *
      * @return Conversion[]
      */
@@ -354,7 +360,7 @@ trait HasMedia
 
         return array_values(array_filter(
             $this->getRegisteredMediaConversions(),
-            fn (Conversion $c) => $c->shouldBePerformedOn($collectionName),
+            static fn (Conversion $c) => $c->shouldBePerformedOn($collectionName),
         ));
     }
 

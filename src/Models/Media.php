@@ -1,4 +1,7 @@
-<?php
+<?php /** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
 
 namespace Jurager\Media\Models;
 
@@ -303,11 +306,11 @@ class Media extends Model implements Attachable
 
     protected static function booted(): void
     {
-        static::created(fn (self $media) => event(new MediaAdded($media)));
+        static::created(static fn (self $media) => event(new MediaAdded($media)));
 
-        static::deleted(fn (self $media) => event(new MediaDeleted($media)));
+        static::deleted(static fn (self $media) => event(new MediaDeleted($media)));
 
-        static::deleting(function (self $media): void {
+        static::deleting(static function (self $media): void {
             /** @var PathGenerator $generator */
             $generator = app(config('media.path_generator', PathGenerator::class));
 

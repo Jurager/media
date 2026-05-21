@@ -30,8 +30,6 @@ class MediaConversion extends Model
         return $this->belongsTo(config('media.models.media', Media::class));
     }
 
-    // â”€â”€â”€ Status helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
     public function isPending(): bool { return $this->status === 'pending'; }
 
     public function isProcessing(): bool { return $this->status === 'processing'; }
@@ -40,15 +38,13 @@ class MediaConversion extends Model
 
     public function isFailed(): bool { return $this->status === 'failed'; }
 
-    // â”€â”€â”€ Properties â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
     public function getProperty(string $key, mixed $default = null): mixed
     {
         return ($this->properties ?? [])[$key] ?? $default;
     }
 
     /**
-     * Image/video width in pixels. Null for non-visual conversions (e.g. PDFâ†’PDF).
+     * Image/video width in pixels. Null for non-visual conversions.
      */
     public function getWidth(): ?int
     {

@@ -1,8 +1,25 @@
-<?php
+<?php /** @noinspection PhpComposerExtensionStubsInspection */
+/** @noinspection ALL */
+/** @noinspection ALL */
+/** @noinspection ALL */
+/** @noinspection ALL */
+/** @noinspection ALL */
+/** @noinspection ALL */
+/** @noinspection ALL */
+/** @noinspection ALL */
+/** @noinspection ALL */
+/** @noinspection ALL */
+/** @noinspection ALL */
+/** @noinspection ALL */
+/** @noinspection ALL */
+/** @noinspection ALL */
+
+/** @noinspection ALL */
 
 namespace Jurager\Media\Support;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -229,6 +246,9 @@ class FileAdder
         return $this->file;
     }
 
+    /**
+     * @throws ConnectionException
+     */
     protected function downloadFromUrl(): string
     {
         $this->guardAgainstSsrf($this->file);
@@ -362,8 +382,8 @@ class FileAdder
             ]);
         }
 
-        $sync  = array_values(array_filter($all, fn ($c) => ! $c->isQueued()));
-        $async = array_values(array_filter($all, fn ($c) => $c->isQueued()));
+        $sync  = array_values(array_filter($all, static fn ($c) => ! $c->isQueued()));
+        $async = array_values(array_filter($all, static fn ($c) => $c->isQueued()));
 
         if (! empty($sync)) {
             PerformConversionsJob::dispatchSync($media, $sync);
@@ -379,7 +399,7 @@ class FileAdder
         }
     }
 
-    private const BLOCKED_EXTENSIONS = [
+    private const array BLOCKED_EXTENSIONS = [
         'php', 'phtml', 'phar', 'php3', 'php4', 'php5', 'php7',
         'pl', 'py', 'rb', 'cgi',
         'exe', 'bat', 'cmd', 'sh', 'bash', 'ps1',
@@ -389,7 +409,7 @@ class FileAdder
     protected function sanitizeFileName(string $fileName): string
     {
         $ext  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
-        $base = Str::slug(pathinfo($fileName, PATHINFO_FILENAME), '-') ?: 'file';
+        $base = Str::slug(pathinfo($fileName, PATHINFO_FILENAME)) ?: 'file';
 
         if ($ext && in_array($ext, self::BLOCKED_EXTENSIONS, true)) {
             throw new InvalidArgumentException(
@@ -400,6 +420,9 @@ class FileAdder
         return $ext ? "{$base}.{$ext}" : $base;
     }
 
+    /**
+     * @throws \Throwable
+     */
     protected function getNextOrderColumn(): int
     {
         $mediaClass = config('media.models.media', Media::class);
@@ -510,23 +533,19 @@ class FileAdder
 
         $maxSize = $collection->getMaxFileSize();
 
-        if ($maxSize > 0 && $this->file instanceof UploadedFile) {
-            if ($this->file->getSize() > $maxSize) {
-                throw new InvalidArgumentException(
-                    "File size [{$this->file->getSize()} bytes] exceeds the maximum [{$maxSize} bytes] "
-                    . "for collection [{$this->collection}]."
-                );
-            }
+        if ($maxSize > 0 && $this->file instanceof UploadedFile && $this->file->getSize() > $maxSize) {
+            throw new InvalidArgumentException(
+                "File size [{$this->file->getSize()} bytes] exceeds the maximum [{$maxSize} bytes] "
+                . "for collection [{$this->collection}]."
+            );
         }
 
         $acceptor = $collection->getFileAcceptor();
 
-        if ($acceptor !== null && $this->file instanceof UploadedFile) {
-            if (! $acceptor($this->file, $collection)) {
-                throw new InvalidArgumentException(
-                    "The uploaded file was rejected by the custom validator for collection [{$this->collection}]."
-                );
-            }
+        if ($acceptor !== null && $this->file instanceof UploadedFile && !$acceptor($this->file, $collection)) {
+            throw new InvalidArgumentException(
+                "The uploaded file was rejected by the custom validator for collection [{$this->collection}]."
+            );
         }
     }
 
