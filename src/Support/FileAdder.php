@@ -405,14 +405,14 @@ class FileAdder
         $mediaClass = config('media.models.media', Media::class);
 
         return DB::transaction(function () use ($mediaClass): int {
-            $max = $mediaClass::query()
+            $rows = $mediaClass::query()
                 ->where('mediable_type', $this->subject->getMorphClass())
                 ->where('mediable_id', $this->subject->getKey())
                 ->where('collection_name', $this->collection)
                 ->lockForUpdate()
-                ->max('order_column');
+                ->get(['order_column']);
 
-            return ($max ?? 0) + 1;
+            return (int) $rows->max('order_column');
         });
     }
 
