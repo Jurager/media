@@ -74,7 +74,14 @@ class ImageProcessor
 
     protected function isImagePath(string $filePath): bool
     {
-        return str_starts_with(mime_content_type($filePath) ?: '', 'image/');
+        $mime = mime_content_type($filePath) ?: '';
+
+        // SVG is XML-based and cannot be decoded by Intervention Image
+        if ($mime === 'image/svg+xml') {
+            return false;
+        }
+
+        return str_starts_with($mime, 'image/');
     }
 
     protected function buildImageManager(): ImageManager
