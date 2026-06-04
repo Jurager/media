@@ -44,7 +44,8 @@ class FileAdder
     public function __construct(
         protected FileProcessorRegistry $processorRegistry,
         protected PathGenerator $pathGenerator,
-    ) {}
+    ) {
+    }
 
     public function for(Model $subject): static
     {
@@ -192,7 +193,7 @@ class FileAdder
         $mediaClass = config('media.models.media', Media::class);
 
         /** @var Media $media */
-        $media = new $mediaClass;
+        $media = new $mediaClass();
         $media->uuid = (string) Str::uuid();
         $media->mediable_type = $this->subject->getMorphClass();
         $media->mediable_id = $this->subject->getKey();

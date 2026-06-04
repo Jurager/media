@@ -11,5 +11,6 @@ class ConversionResult
         public readonly string $extension,
         public readonly ?int $width = null,
         public readonly ?int $height = null,
-    ) {}
+    ) {
+    }
 }

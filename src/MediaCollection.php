@@ -1,4 +1,6 @@
-<?php /** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+<?php
+
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
 
 namespace Jurager\Media;
 
@@ -11,21 +13,32 @@ class MediaCollection
     use Macroable;
 
     protected bool $singleFile = false;
+
     protected int $collectionSizeLimit = 0;
+
     protected array $allowedMimeTypes = [];
+
     protected int $maxFileSizeInBytes = 0;
+
     protected ?string $disk = null;
+
     protected ?string $conversionsDisk = null;
+
     protected bool $performConversions = true;
+
     protected array $fallbackUrls = [];
+
     protected array $fallbackPaths = [];
+
     /** @var callable|null */
     protected $fileAcceptor = null;
 
     /** @var callable[] */
     protected array $conversionCallbacks = [];
 
-    public function __construct(public readonly string $name) {}
+    public function __construct(public readonly string $name)
+    {
+    }
 
     /**
      * Allow only one file; any previous file is deleted before the new one is stored.
@@ -163,21 +176,45 @@ class MediaCollection
 
     // â”€â”€â”€ Getters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    public function isSingleFile(): bool { return $this->singleFile; }
+    public function isSingleFile(): bool
+    {
+        return $this->singleFile;
+    }
 
-    public function getCollectionSizeLimit(): int { return $this->collectionSizeLimit; }
+    public function getCollectionSizeLimit(): int
+    {
+        return $this->collectionSizeLimit;
+    }
 
-    public function getAllowedMimeTypes(): array { return $this->allowedMimeTypes; }
+    public function getAllowedMimeTypes(): array
+    {
+        return $this->allowedMimeTypes;
+    }
 
-    public function getMaxFileSize(): int { return $this->maxFileSizeInBytes; }
+    public function getMaxFileSize(): int
+    {
+        return $this->maxFileSizeInBytes;
+    }
 
-    public function getDisk(): ?string { return $this->disk; }
+    public function getDisk(): ?string
+    {
+        return $this->disk;
+    }
 
-    public function getConversionsDisk(): ?string { return $this->conversionsDisk; }
+    public function getConversionsDisk(): ?string
+    {
+        return $this->conversionsDisk;
+    }
 
-    public function shouldPerformConversions(): bool { return $this->performConversions; }
+    public function shouldPerformConversions(): bool
+    {
+        return $this->performConversions;
+    }
 
-    public function getFileAcceptor(): ?callable { return $this->fileAcceptor; }
+    public function getFileAcceptor(): ?callable
+    {
+        return $this->fileAcceptor;
+    }
 
     public function getFallbackUrl(string $conversion = ''): ?string
     {

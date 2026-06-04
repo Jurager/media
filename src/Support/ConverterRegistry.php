@@ -24,8 +24,8 @@ class ConverterRegistry
             return app($this->converters[$mimeType]);
         }
 
-        $prefix   = explode('/', $mimeType, 2)[0];
-        $wildcard = $prefix . '/*';
+        $prefix = explode('/', $mimeType, 2)[0];
+        $wildcard = $prefix.'/*';
 
         if (isset($this->converters[$wildcard])) {
             return app($this->converters[$wildcard]);

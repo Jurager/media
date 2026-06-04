@@ -20,8 +20,8 @@ class MediaConversion extends Model
     ];
 
     protected $casts = [
-        'properties'   => 'array',
-        'size'         => 'integer',
+        'properties' => 'array',
+        'size' => 'integer',
         'completed_at' => 'datetime',
     ];
 
@@ -30,13 +30,25 @@ class MediaConversion extends Model
         return $this->belongsTo(config('media.models.media', Media::class));
     }
 
-    public function isPending(): bool { return $this->status === 'pending'; }
+    public function isPending(): bool
+    {
+        return $this->status === 'pending';
+    }
 
-    public function isProcessing(): bool { return $this->status === 'processing'; }
+    public function isProcessing(): bool
+    {
+        return $this->status === 'processing';
+    }
 
-    public function isDone(): bool { return $this->status === 'done'; }
+    public function isDone(): bool
+    {
+        return $this->status === 'done';
+    }
 
-    public function isFailed(): bool { return $this->status === 'failed'; }
+    public function isFailed(): bool
+    {
+        return $this->status === 'failed';
+    }
 
     public function getProperty(string $key, mixed $default = null): mixed
     {

@@ -38,7 +38,7 @@ class MediaPruneConversionsCommand extends Command
                         continue;
                     }
 
-                    $instance = new $fqcn;
+                    $instance = new $fqcn();
                     $defined = array_map(
                         static fn ($c) => $c->name,
                         $instance->getConversionsForCollection($media->collection_name),
@@ -53,7 +53,8 @@ class MediaPruneConversionsCommand extends Command
                         $conversionFile = "{$basename}-{$conv->name}.{$conv->extension}";
                         $conversionPath = $generator->getPathForConversions($media).$conversionFile;
 
-                        $this->line($dryRun
+                        $this->line(
+                            $dryRun
                             ? "  [dry-run] stale: {$media->mediable_type}#{$media->mediable_id} — {$conv->name}"
                             : "  Pruning: {$media->mediable_type}#{$media->mediable_id} — {$conv->name}"
                         );
@@ -69,7 +70,8 @@ class MediaPruneConversionsCommand extends Command
                 }
             });
 
-        $this->info($dryRun
+        $this->info(
+            $dryRun
             ? "Dry run: {$pruned} stale conversion(s) would be pruned."
             : "Pruned {$pruned} stale conversion(s)."
         );

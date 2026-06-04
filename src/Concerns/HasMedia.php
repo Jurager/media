@@ -306,9 +306,13 @@ trait HasMedia
         return $this;
     }
 
-    public function registerMediaConversions(Media $media): void {}
+    public function registerMediaConversions(Media $media): void
+    {
+    }
 
-    public function registerMediaCollections(): void {}
+    public function registerMediaCollections(): void
+    {
+    }
 
     public function addMediaConversion(string $name): Conversion
     {
@@ -331,7 +335,7 @@ trait HasMedia
     {
         if ($this->registeredConversionsCache === null) {
             $this->mediaConversions = [];
-            $this->registerMediaConversions(new Media);
+            $this->registerMediaConversions(new Media());
             $this->registeredConversionsCache = $this->mediaConversions;
         }
 
@@ -387,7 +391,7 @@ trait HasMedia
             $this->mediaConversions = [];
 
             foreach ($callbacks as $callback) {
-                $callback(new Media);
+                $callback(new Media());
             }
 
             return $this->mediaConversions;

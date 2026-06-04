@@ -21,7 +21,7 @@ class MediaServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/media.php', 'media');
 
         $this->app->singleton(ConverterRegistry::class, function () {
-            $registry = new ConverterRegistry;
+            $registry = new ConverterRegistry();
 
             foreach (config('media.converters', []) as $mime => $class) {
                 $registry->register($mime, $class);
@@ -31,7 +31,7 @@ class MediaServiceProvider extends ServiceProvider
         });
 
         $this->app->singleton(FileProcessorRegistry::class, function () {
-            $registry = new FileProcessorRegistry;
+            $registry = new FileProcessorRegistry();
 
             foreach (config('media.processors', []) as $mime => $class) {
                 $registry->register($mime, $class);

@@ -9,5 +9,6 @@ class ProcessResult
         public readonly string $path,
         /** Extracted metadata — e.g. ['width' => 1920, 'height' => 1080]. */
         public readonly array $properties,
-    ) {}
+    ) {
+    }
 }

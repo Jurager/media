@@ -1,4 +1,6 @@
-<?php /** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
+<?php
+
+/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
 /** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
 
 /** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
@@ -14,7 +16,7 @@ class PathGenerator
      */
     public function getPath(Media $media): string
     {
-        return $this->getBasePath($media) . '/';
+        return $this->getBasePath($media).'/';
     }
 
     /**
@@ -22,7 +24,7 @@ class PathGenerator
      */
     public function getPathForConversions(Media $media): string
     {
-        return $this->getBasePath($media) . '/conversions/';
+        return $this->getBasePath($media).'/conversions/';
     }
 
     protected function getBasePath(Media $media): string

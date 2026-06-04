@@ -38,7 +38,7 @@ class MediaRegenerateCommand extends Command
         $query = $mediaClass::query();
 
         if ($modelClass) {
-            $query->where('mediable_type', (new $modelClass)->getMorphClass());
+            $query->where('mediable_type', (new $modelClass())->getMorphClass());
         }
 
         if ($collection) {
@@ -71,12 +71,15 @@ class MediaRegenerateCommand extends Command
 
                 $names = array_map(static fn ($c) => $c->name, $conversions);
 
+                $convDisk = $this->getConversionsDiskFor($media);
+
                 // Reset existing records to pending (upsert so new conversions also get created)
                 foreach ($conversions as $conversion) {
                     $mediaConversionClass::updateOrCreate(
                         ['media_id' => $media->id, 'name' => $conversion->name],
                         [
                             'status' => 'pending',
+                            'disk' => $convDisk,
                             'error_message' => null,
                             'completed_at' => null,
                             'properties' => null,
@@ -115,5 +118,18 @@ class MediaRegenerateCommand extends Command
         }
 
         return $mediable->getConversionsForCollection($media->collection_name);
+    }
+
+    protected function getConversionsDiskFor(Media $media): string
+    {
+        $mediable = $media->mediable;
+
+        $collectionDisk = $mediable && method_exists($mediable, 'getMediaCollection')
+            ? $mediable->getMediaCollection($media->collection_name)?->getConversionsDisk()
+            : null;
+
+        return $collectionDisk
+            ?? config('media.conversions_disk')
+            ?? $media->disk;
     }
 }

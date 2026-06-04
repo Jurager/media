@@ -6,5 +6,7 @@ use Jurager\Media\Models\Media;
 
 class MediaAdded
 {
-    public function __construct(public readonly Media $media) {}
+    public function __construct(public readonly Media $media)
+    {
+    }
 }

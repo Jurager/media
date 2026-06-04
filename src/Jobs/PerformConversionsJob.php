@@ -18,7 +18,10 @@ use Jurager\Media\Support\PathGenerator;
 
 class PerformConversionsJob implements ShouldBeUnique, ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
 
     public int $tries = 3;
 
@@ -30,7 +33,8 @@ class PerformConversionsJob implements ShouldBeUnique, ShouldQueue
     public function __construct(
         public readonly Media $media,
         public readonly array $conversions,
-    ) {}
+    ) {
+    }
 
     public function uniqueId(): string
     {

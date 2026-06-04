@@ -1,4 +1,6 @@
-<?php /** @noinspection PhpComposerExtensionStubsInspection */
+<?php
+
+/** @noinspection PhpComposerExtensionStubsInspection */
 
 /** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
 
@@ -36,13 +38,13 @@ class PdfConverter implements Converter
             throw new RuntimeException('PdfConverter requires the Imagick PHP extension.');
         }
 
-        $dpi  = (int) config('media.pdf_converter.resolution', 150);
+        $dpi = (int) config('media.pdf_converter.resolution', 150);
         $page = (int) config('media.pdf_converter.page', 0);
 
         $rasterized = $this->rasterize($sourcePath, $dpi, $page);
 
         try {
-            return (new ImageConverter)->convert($rasterized, $conversion, $media);
+            return (new ImageConverter())->convert($rasterized, $conversion, $media);
         } finally {
             @unlink($rasterized);
         }
@@ -53,9 +55,9 @@ class PdfConverter implements Converter
      */
     protected function rasterize(string $sourcePath, int $dpi, int $page): string
     {
-        $imagick = new Imagick;
+        $imagick = new Imagick();
         $imagick->setResolution($dpi, $dpi);
-        $imagick->readImage($sourcePath . "[{$page}]");
+        $imagick->readImage($sourcePath."[{$page}]");
         $imagick->setImageColorspace(Imagick::COLORSPACE_SRGB);
         $imagick->setImageBackgroundColor('white');
         $imagick->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);

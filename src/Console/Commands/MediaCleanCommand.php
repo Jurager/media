@@ -35,7 +35,8 @@ class MediaCleanCommand extends Command
                 });
             });
 
-        $this->info($dryRun
+        $this->info(
+            $dryRun
             ? "Dry run: {$deleted} orphaned record(s) would be deleted."
             : "Deleted {$deleted} orphaned media record(s)."
         );
@@ -63,7 +64,7 @@ class MediaCleanCommand extends Command
         }
 
         // Pass 2 — collection not registered on the model.
-        $instance = new $fqcn;
+        $instance = new $fqcn();
 
         [$existing, $unknown] = $existing->partition(
             fn ($m) => $instance->getMediaCollection($m->collection_name) !== null
