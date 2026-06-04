@@ -33,8 +33,7 @@ class PerformConversionsJob implements ShouldBeUnique, ShouldQueue
     public function __construct(
         public readonly Media $media,
         public readonly array $conversions,
-    ) {
-    }
+    ) {}
 
     public function uniqueId(): string
     {
@@ -122,7 +121,7 @@ class PerformConversionsJob implements ShouldBeUnique, ShouldQueue
                     $content = file_get_contents($conversionTmp);
                     $resultSize = strlen($content);
 
-                    $convDisk = $record?->disk ?? config('media.conversions_disk') ?? $this->media->disk;
+                    $convDisk = $record?->disk ?? $this->media->conversionsDisk();
                     Storage::disk($convDisk)->put($conversionPath, $content);
 
                     $properties = array_filter([

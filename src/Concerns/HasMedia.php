@@ -17,7 +17,6 @@ use Jurager\Media\Models\Media;
 use Jurager\Media\Models\MediaConversion;
 use Jurager\Media\Support\FileAdder;
 use Jurager\Media\Support\PathGenerator;
-use PHPUnit\Framework\Assert;
 use Throwable;
 
 trait HasMedia
@@ -141,8 +140,11 @@ trait HasMedia
         $copy->uuid = (string) Str::uuid();
         $copy->mediable_type = $this->getMorphClass();
         $copy->mediable_id = $this->getKey();
-        $copy->order_column = $this->nextOrderColumnFor($original->collection_name);
-        $copy->save();
+
+        DB::transaction(static function () use ($copy): void {
+            $copy->assignNextOrderColumn();
+            $copy->save();
+        });
 
         Storage::disk($original->disk)->copy(
             $generator->getPath($original).$original->file_name,
@@ -174,25 +176,6 @@ trait HasMedia
         $this->unsetRelation('media');
 
         return $copy;
-    }
-
-    /**
-     * @throws Throwable
-     */
-    protected function nextOrderColumnFor(string $collection): int
-    {
-        $mediaClass = config('media.models.media', Media::class);
-
-        return DB::transaction(function () use ($mediaClass, $collection): int {
-            $max = $mediaClass::query()
-                ->where('mediable_type', $this->getMorphClass())
-                ->where('mediable_id', $this->getKey())
-                ->where('collection_name', $collection)
-                ->lockForUpdate()
-                ->max('order_column');
-
-            return ($max ?? 0) + 1;
-        });
     }
 
     /**
@@ -306,13 +289,9 @@ trait HasMedia
         return $this;
     }
 
-    public function registerMediaConversions(Media $media): void
-    {
-    }
+    public function registerMediaConversions(Media $media): void {}
 
-    public function registerMediaCollections(): void
-    {
-    }
+    public function registerMediaCollections(): void {}
 
     public function addMediaConversion(string $name): Conversion
     {
@@ -335,7 +314,7 @@ trait HasMedia
     {
         if ($this->registeredConversionsCache === null) {
             $this->mediaConversions = [];
-            $this->registerMediaConversions(new Media());
+            $this->registerMediaConversions(new Media);
             $this->registeredConversionsCache = $this->mediaConversions;
         }
 
@@ -360,15 +339,6 @@ trait HasMedia
     }
 
     /**
-     * Return the conversions that apply to a specific collection.
-     *
-     * If the collection was registered with withConversions() callbacks, those take priority —
-     * their conversions are returned without consulting registerMediaConversions() at all.
-     * Otherwise, falls back to registerMediaConversions() filtered by performOnCollections().
-     *
-     * @return Conversion[]
-     */
-    /**
      * Return the conversions that apply to a specific Media item, filtered by both
      * its collection and its MIME type (via performOnMimeTypes()).
      *
@@ -391,7 +361,7 @@ trait HasMedia
             $this->mediaConversions = [];
 
             foreach ($callbacks as $callback) {
-                $callback(new Media());
+                $callback(new Media);
             }
 
             return $this->mediaConversions;
@@ -437,44 +407,5 @@ trait HasMedia
     protected function resolveDynamicMediaCollection(string $name): ?MediaCollection
     {
         return null;
-    }
-
-    public function assertHasMedia(string $collection = 'default', ?int $count = null): void
-    {
-        $media = $this->getMedia($collection);
-
-        Assert::assertTrue(
-            $media->isNotEmpty(),
-            "Expected [{$collection}] collection to have media, but it is empty.",
-        );
-
-        if ($count !== null) {
-            Assert::assertCount(
-                $count,
-                $media,
-                "Expected [{$collection}] to have {$count} item(s), got {$media->count()}.",
-            );
-        }
-    }
-
-    public function assertHasNoMedia(string $collection = 'default'): void
-    {
-        $media = $this->getMedia($collection);
-
-        Assert::assertTrue(
-            $media->isEmpty(),
-            "Expected [{$collection}] to be empty, but it has {$media->count()} item(s).",
-        );
-    }
-
-    public function assertMediaCount(string $collection, int $count): void
-    {
-        $media = $this->getMedia($collection);
-
-        Assert::assertCount(
-            $count,
-            $media,
-            "Expected [{$collection}] to have {$count} item(s), got {$media->count()}.",
-        );
     }
 }

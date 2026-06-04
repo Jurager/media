@@ -10,6 +10,5 @@ class MediaConversionGenerated
     public function __construct(
         public readonly Media $media,
         public readonly Conversion $conversion,
-    ) {
-    }
+    ) {}
 }

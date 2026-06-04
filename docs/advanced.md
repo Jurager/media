@@ -42,7 +42,7 @@ class UpdateSearchIndex
 {
     public function handle(MediaConversionGenerated $event): void
     {
-        // Re-index the product in Typesense once its thumb is ready
+        // Re-index the product once its thumb is ready
         if ($event->conversion->name === 'thumb') {
             $event->media->mediable?->searchable();
         }
@@ -70,6 +70,21 @@ To opt out of automatic cleanup entirely, set `$deleteMediaOnDelete = false` and
 
 ## Testing
 
+The fluent model assertions (`assertHasMedia`, `assertMediaCount`, `assertHasNoMedia`) live in a
+separate `InteractsWithMediaAssertions` trait, so production models never depend on `phpunit/phpunit`.
+Add the trait to your model (or a test-only subclass) when you want them:
+
+```php
+use Jurager\Media\Concerns\HasMedia;
+use Jurager\Media\Concerns\InteractsWithMediaAssertions;
+
+class Product extends Model
+{
+    use HasMedia;
+    use InteractsWithMediaAssertions; // test assertions, opt-in
+}
+```
+
 ```php
 // In setUp() or in the test method
 Media::fake();
@@ -80,7 +95,7 @@ Media::fake(['s3-private']);
 // Upload
 $product->addMedia(UploadedFile::fake()->image('photo.jpg'))->toMediaCollection('gallery');
 
-// Assertions on the model
+// Assertions on the model (require InteractsWithMediaAssertions)
 $product->assertHasMedia('gallery');
 $product->assertMediaCount('gallery', 1);
 $product->assertHasNoMedia('documents');
@@ -168,13 +183,16 @@ Set the CDN base URL once; all `getUrl()` calls â€” originals and conversions â€
 MEDIA_CDN_URL=https://d1234example.cloudfront.net
 ```
 
-The path is appended directly: `{cdn_url}/{model}/{id}/{collection}/{file}`. No code changes are required in the application.
+The path is appended directly: `{cdn_url}/{model}/{mediable_id}/{collection}/{media_id}/{file}`. No code changes are required in the application.
 
 ---
 
 ## Custom path generator
 
-The default strategy stores files at `{model_class}/{id}/{collection}/`. To change the layout, implement a custom generator and register it in `config/media.php`:
+The default strategy stores files at `{model_class}/{mediable_id}/{collection}/{media_id}/`. The trailing
+`{media_id}` segment isolates every record in its own directory, so files with the same name never
+collide and deleting one media never affects its siblings. To change the layout, implement a custom
+generator and register it in `config/media.php`:
 
 ```php
 namespace App\Media;

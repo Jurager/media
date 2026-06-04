@@ -3,16 +3,11 @@
 namespace Jurager\Media\Support;
 
 use Jurager\Media\Contracts\Converter;
+use Jurager\Media\Support\Concerns\ResolvesByMimePattern;
 
 class ConverterRegistry
 {
-    /** @var array<string, class-string<Converter>> */
-    private array $converters = [];
-
-    public function register(string $mimePattern, string $converterClass): void
-    {
-        $this->converters[$mimePattern] = $converterClass;
-    }
+    use ResolvesByMimePattern;
 
     /**
      * Resolve a converter for the given MIME type.
@@ -20,17 +15,8 @@ class ConverterRegistry
      */
     public function resolve(string $mimeType): ?Converter
     {
-        if (isset($this->converters[$mimeType])) {
-            return app($this->converters[$mimeType]);
-        }
+        $class = $this->match($mimeType);
 
-        $prefix = explode('/', $mimeType, 2)[0];
-        $wildcard = $prefix.'/*';
-
-        if (isset($this->converters[$wildcard])) {
-            return app($this->converters[$wildcard]);
-        }
-
-        return null;
+        return $class ? app($class) : null;
     }
 }

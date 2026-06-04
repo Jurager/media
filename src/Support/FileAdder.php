@@ -44,8 +44,7 @@ class FileAdder
     public function __construct(
         protected FileProcessorRegistry $processorRegistry,
         protected PathGenerator $pathGenerator,
-    ) {
-    }
+    ) {}
 
     public function for(Model $subject): static
     {
@@ -193,7 +192,7 @@ class FileAdder
         $mediaClass = config('media.models.media', Media::class);
 
         /** @var Media $media */
-        $media = new $mediaClass();
+        $media = new $mediaClass;
         $media->uuid = (string) Str::uuid();
         $media->mediable_type = $this->subject->getMorphClass();
         $media->mediable_id = $this->subject->getKey();
@@ -204,9 +203,14 @@ class FileAdder
         $media->disk = $disk;
         $media->size = $size;
         $media->hash = $hash;
-        $media->order_column = $this->getNextOrderColumn();
         $media->properties = $result->properties ?: null;
-        $media->save();
+
+        // Assign order_column and insert in one transaction so the row lock held by
+        // assignNextOrderColumn() spans the insert and concurrent uploads can't collide.
+        DB::transaction(static function () use ($media): void {
+            $media->assignNextOrderColumn();
+            $media->save();
+        });
 
         $handle = fopen($result->path, 'rb');
 
@@ -374,9 +378,7 @@ class FileAdder
             return;
         }
 
-        $convDisk = $collectionDef?->getConversionsDisk()
-            ?? config('media.conversions_disk')
-            ?? $media->disk;
+        $convDisk = $collectionDef?->getConversionsDisk() ?? $media->conversionsDisk();
 
         $mediaConversionClass = config('media.models.media_conversion', MediaConversion::class);
 
@@ -426,22 +428,6 @@ class FileAdder
         }
 
         return $ext ? "{$base}.{$ext}" : $base;
-    }
-
-    protected function getNextOrderColumn(): int
-    {
-        $mediaClass = config('media.models.media', Media::class);
-
-        return DB::transaction(function () use ($mediaClass): int {
-            $rows = $mediaClass::query()
-                ->where('mediable_type', $this->subject->getMorphClass())
-                ->where('mediable_id', $this->subject->getKey())
-                ->where('collection_name', $this->collection)
-                ->lockForUpdate()
-                ->get(['order_column']);
-
-            return (int) $rows->max('order_column') + 1;
-        });
     }
 
     protected function getCollectionSizeLimit(): int

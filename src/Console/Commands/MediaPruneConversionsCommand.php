@@ -38,7 +38,7 @@ class MediaPruneConversionsCommand extends Command
                         continue;
                     }
 
-                    $instance = new $fqcn();
+                    $instance = new $fqcn;
                     $defined = array_map(
                         static fn ($c) => $c->name,
                         $instance->getConversionsForCollection($media->collection_name),
@@ -60,7 +60,7 @@ class MediaPruneConversionsCommand extends Command
                         );
 
                         if (! $dryRun) {
-                            $disk = $conv->disk ?? config('media.conversions_disk') ?? $media->disk;
+                            $disk = $conv->disk ?? $media->conversionsDisk();
                             Storage::disk($disk)->delete($conversionPath);
                             $mediaConversionClass::where('id', $conv->id)->delete();
                         }

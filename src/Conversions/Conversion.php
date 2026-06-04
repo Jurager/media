@@ -26,9 +26,7 @@ class Conversion
 
     protected array $mimeTypes = [];
 
-    public function __construct(public readonly string $name)
-    {
-    }
+    public function __construct(public readonly string $name) {}
 
     public function width(int $width): static
     {

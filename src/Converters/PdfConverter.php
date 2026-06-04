@@ -1,9 +1,5 @@
 <?php
 
-/** @noinspection PhpComposerExtensionStubsInspection */
-
-/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
-
 namespace Jurager\Media\Converters;
 
 use Imagick;
@@ -44,7 +40,7 @@ class PdfConverter implements Converter
         $rasterized = $this->rasterize($sourcePath, $dpi, $page);
 
         try {
-            return (new ImageConverter())->convert($rasterized, $conversion, $media);
+            return (new ImageConverter)->convert($rasterized, $conversion, $media);
         } finally {
             @unlink($rasterized);
         }
@@ -55,7 +51,7 @@ class PdfConverter implements Converter
      */
     protected function rasterize(string $sourcePath, int $dpi, int $page): string
     {
-        $imagick = new Imagick();
+        $imagick = new Imagick;
         $imagick->setResolution($dpi, $dpi);
         $imagick->readImage($sourcePath."[{$page}]");
         $imagick->setImageColorspace(Imagick::COLORSPACE_SRGB);

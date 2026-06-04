@@ -1,10 +1,5 @@
 <?php
 
-/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
-/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
-
-/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
-
 namespace Jurager\Media\Models;
 
 use DateTimeInterface;
@@ -55,7 +50,33 @@ class Media extends Model implements Attachable
         );
     }
 
-    // â”€â”€â”€ URLs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    /**
+     * Disk where this media's conversions are stored, absent a per-conversion override.
+     * Mirrors the fallback used when conversion records are created.
+     */
+    public function conversionsDisk(): string
+    {
+        return config('media.conversions_disk') ?? $this->disk;
+    }
+
+    /**
+     * Set order_column to the next position within this media's collection.
+     *
+     * Must run inside a database transaction: the row lock is only meaningful
+     * while the surrounding transaction (which also inserts this record) is open,
+     * which is what makes concurrent uploads race-free.
+     */
+    public function assignNextOrderColumn(): void
+    {
+        $max = static::query()
+            ->where('mediable_type', $this->mediable_type)
+            ->where('mediable_id', $this->mediable_id)
+            ->where('collection_name', $this->collection_name)
+            ->lockForUpdate()
+            ->max('order_column');
+
+        $this->order_column = (int) $max + 1;
+    }
 
     /**
      * Public URL for the original or a named conversion.
@@ -97,7 +118,7 @@ class Media extends Model implements Attachable
         array $options = [],
     ): string {
         $conv = $this->getConversionRecord($conversion);
-        $disk = $conv?->disk ?? config('media.conversions_disk') ?? $this->disk;
+        $disk = $conv?->disk ?? $this->conversionsDisk();
 
         return Storage::disk($disk)->temporaryUrl(
             $this->getPath($conversion),
@@ -106,16 +127,12 @@ class Media extends Model implements Attachable
         );
     }
 
-    // â”€â”€â”€ Mail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
     public function toMailAttachment(): Attachment
     {
         return Attachment::fromStorageDisk($this->disk, $this->getPath())
             ->as($this->file_name)
             ->withMime($this->mime_type ?? 'application/octet-stream');
     }
-
-    // â”€â”€â”€ Response helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function stream(): StreamedResponse
     {
@@ -129,8 +146,6 @@ class Media extends Model implements Attachable
             $downloadName ?? $this->file_name,
         );
     }
-
-    // â”€â”€â”€ Paths â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function getPath(string $conversion = ''): string
     {
@@ -152,8 +167,6 @@ class Media extends Model implements Attachable
 
         return "{$basename}-{$conversion}.{$ext}";
     }
-
-    // â”€â”€â”€ Conversions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function hasGeneratedConversion(string $name): bool
     {
@@ -181,14 +194,10 @@ class Media extends Model implements Attachable
         $this->unsetRelation('conversions');
     }
 
-    // â”€â”€â”€ Type checks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
     public function isImage(): bool
     {
         return str_starts_with($this->mime_type ?? '', 'image/');
     }
-
-    // â”€â”€â”€ Properties (system metadata) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function getProperty(string $key, mixed $default = null): mixed
     {
@@ -211,8 +220,6 @@ class Media extends Model implements Attachable
         return $this->getProperty('height');
     }
 
-    // â”€â”€â”€ Conversion status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
     /**
      * Names of conversions with status = pending.
      *
@@ -220,14 +227,7 @@ class Media extends Model implements Attachable
      */
     public function pendingConversions(): array
     {
-        if ($this->relationLoaded('conversions')) {
-            return $this->conversions
-                ->where('status', 'pending')
-                ->pluck('name')
-                ->all();
-        }
-
-        return $this->conversions()->where('status', 'pending')->pluck('name')->all();
+        return $this->conversionNamesWithStatus('pending');
     }
 
     /**
@@ -237,22 +237,27 @@ class Media extends Model implements Attachable
      */
     public function failedConversions(): array
     {
+        return $this->conversionNamesWithStatus('failed');
+    }
+
+    /**
+     * Conversion names filtered by status, reusing the loaded relation when present.
+     *
+     * @return string[]
+     */
+    protected function conversionNamesWithStatus(string $status): array
+    {
         if ($this->relationLoaded('conversions')) {
-            return $this->conversions
-                ->where('status', 'failed')
-                ->pluck('name')
-                ->all();
+            return $this->conversions->where('status', $status)->pluck('name')->all();
         }
 
-        return $this->conversions()->where('status', 'failed')->pluck('name')->all();
+        return $this->conversions()->where('status', $status)->pluck('name')->all();
     }
 
     public function isConversionPending(string $name): bool
     {
         return in_array($name, $this->pendingConversions(), true);
     }
-
-    // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function humanReadableSize(): string
     {
@@ -284,8 +289,6 @@ class Media extends Model implements Attachable
         }
     }
 
-    // â”€â”€â”€ Internal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
     protected function getConversionRecord(string $name): ?MediaConversion
     {
         if ($this->relationLoaded('conversions')) {
@@ -316,24 +319,23 @@ class Media extends Model implements Attachable
             /** @var PathGenerator $generator */
             $generator = app(PathGenerator::class);
 
-            // Delete original file
-            Storage::disk($media->disk)->delete(
-                $generator->getPath($media).$media->file_name
-            );
-
-            // Delete conversions directory from each unique disk conversions were stored on
-            $conversionsPath = $generator->getPathForConversions($media);
             $media->load('conversions');
 
-            $disks = $media->conversions->pluck('disk')->filter()->unique()->all();
+            // Each media owns an isolated directory, so removing it deletes the original
+            // together with every conversion stored on the same disk in a single call.
+            Storage::disk($media->disk)->deleteDirectory(rtrim($generator->getPath($media), '/'));
 
-            if (empty($disks)) {
-                $fallback = config('media.conversions_disk') ?? $media->disk;
-                Storage::disk($fallback)->deleteDirectory($conversionsPath);
-            } else {
-                foreach ($disks as $disk) {
-                    Storage::disk($disk)->deleteDirectory($conversionsPath);
-                }
+            // Conversions kept on a different disk live outside that directory — clear them too.
+            $conversionsPath = $generator->getPathForConversions($media);
+
+            $otherDisks = $media->conversions
+                ->pluck('disk')
+                ->filter()
+                ->unique()
+                ->reject(static fn (string $disk) => $disk === $media->disk);
+
+            foreach ($otherDisks as $disk) {
+                Storage::disk($disk)->deleteDirectory($conversionsPath);
             }
             // media_conversions rows are deleted by FK cascade
         });

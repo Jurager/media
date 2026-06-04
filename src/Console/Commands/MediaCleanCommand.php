@@ -64,7 +64,7 @@ class MediaCleanCommand extends Command
         }
 
         // Pass 2 — collection not registered on the model.
-        $instance = new $fqcn();
+        $instance = new $fqcn;
 
         [$existing, $unknown] = $existing->partition(
             fn ($m) => $instance->getMediaCollection($m->collection_name) !== null

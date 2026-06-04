@@ -1,7 +1,5 @@
 <?php
 
-/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
-
 namespace Jurager\Media;
 
 use Illuminate\Http\UploadedFile;
@@ -36,9 +34,7 @@ class MediaCollection
     /** @var callable[] */
     protected array $conversionCallbacks = [];
 
-    public function __construct(public readonly string $name)
-    {
-    }
+    public function __construct(public readonly string $name) {}
 
     /**
      * Allow only one file; any previous file is deleted before the new one is stored.
@@ -173,8 +169,6 @@ class MediaCollection
 
         return $this;
     }
-
-    // â”€â”€â”€ Getters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function isSingleFile(): bool
     {

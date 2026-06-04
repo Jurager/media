@@ -38,7 +38,7 @@ class MediaRegenerateCommand extends Command
         $query = $mediaClass::query();
 
         if ($modelClass) {
-            $query->where('mediable_type', (new $modelClass())->getMorphClass());
+            $query->where('mediable_type', (new $modelClass)->getMorphClass());
         }
 
         if ($collection) {
@@ -128,8 +128,6 @@ class MediaRegenerateCommand extends Command
             ? $mediable->getMediaCollection($media->collection_name)?->getConversionsDisk()
             : null;
 
-        return $collectionDisk
-            ?? config('media.conversions_disk')
-            ?? $media->disk;
+        return $collectionDisk ?? $media->conversionsDisk();
     }
 }

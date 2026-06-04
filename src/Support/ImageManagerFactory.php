@@ -11,8 +11,8 @@ class ImageManagerFactory
     public static function make(): ImageManager
     {
         $driver = config('media.image_driver', 'gd') === 'imagick'
-            ? new ImagickDriver()
-            : new GdDriver();
+            ? new ImagickDriver
+            : new GdDriver;
 
         return new ImageManager($driver);
     }

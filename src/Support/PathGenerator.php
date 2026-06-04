@@ -1,10 +1,5 @@
 <?php
 
-/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
-/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
-
-/** @noinspection PhpUnnecessaryCurlyVarSyntaxInspection */
-
 namespace Jurager\Media\Support;
 
 use Jurager\Media\Models\Media;
@@ -12,7 +7,11 @@ use Jurager\Media\Models\Media;
 class PathGenerator
 {
     /**
-     * Base path for the original file: "{model}/{id}/{collection}/"
+     * Base path for the original file: "{model}/{mediable_id}/{collection}/{media_id}/"
+     *
+     * The media id segment isolates every record into its own directory, so two
+     * files with the same name never collide and deleting one media never touches
+     * the files of its siblings in the same collection.
      */
     public function getPath(Media $media): string
     {
@@ -20,7 +19,7 @@ class PathGenerator
     }
 
     /**
-     * Path for generated conversions: "{model}/{id}/{collection}/conversions/"
+     * Path for generated conversions: "{model}/{mediable_id}/{collection}/{media_id}/conversions/"
      */
     public function getPathForConversions(Media $media): string
     {
@@ -31,6 +30,6 @@ class PathGenerator
     {
         $type = strtolower(class_basename($media->mediable_type));
 
-        return "{$type}/{$media->mediable_id}/{$media->collection_name}";
+        return "{$type}/{$media->mediable_id}/{$media->collection_name}/{$media->getKey()}";
     }
 }

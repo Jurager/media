@@ -252,17 +252,20 @@ The command resets existing `MediaConversion` records to `status=pending` before
 
 ## Storage layout
 
-Given `Product` with `id=42`, collection `gallery`, file `photo.jpg`:
+Given `Product` with `id=42`, collection `gallery`, the `Media` record `id=7`, file `photo.jpg`:
 
 ```
-product/42/gallery/photo.jpg                        ← original
-product/42/gallery/conversions/photo-thumb.webp     ← thumb conversion
-product/42/gallery/conversions/photo-medium.jpg     ← medium conversion
+product/42/gallery/7/photo.jpg                        ← original
+product/42/gallery/7/conversions/photo-thumb.webp     ← thumb conversion
+product/42/gallery/7/conversions/photo-medium.jpg     ← medium conversion
 ```
 
-PDF preview:
+The `Media` id segment (`7`) gives every record its own directory, so two uploads named `photo.jpg`
+never overwrite each other and deleting one media leaves the rest of the collection untouched.
+
+PDF preview (`Media` record `id=9`):
 
 ```
-product/42/documents/manual.pdf                         ← original
-product/42/documents/conversions/manual-preview.jpg     ← first page preview
+product/42/documents/9/manual.pdf                         ← original
+product/42/documents/9/conversions/manual-preview.jpg     ← first page preview
 ```
