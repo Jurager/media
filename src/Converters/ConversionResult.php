@@ -2,14 +2,14 @@
 
 namespace Jurager\Media\Converters;
 
-class ConversionResult
+final readonly class ConversionResult
 {
     public function __construct(
         /** Absolute path to the output temp file. */
-        public readonly string $path,
+        public string $path,
         /** File extension for the output (e.g. 'webp', 'jpg', 'png'). */
-        public readonly string $extension,
-        public readonly ?int $width = null,
-        public readonly ?int $height = null,
+        public string $extension,
+        public ?int $width = null,
+        public ?int $height = null,
     ) {}
 }

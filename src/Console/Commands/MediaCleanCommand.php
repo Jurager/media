@@ -46,28 +46,28 @@ class MediaCleanCommand extends Command
 
     private function processGroup(Collection $group, string $type, bool $dryRun): int
     {
-        $fqcn = $this->resolveModelClass($type);
+        $modelClass = $this->resolveModelClass($type);
 
-        if (! class_exists($fqcn)) {
+        if (! class_exists($modelClass)) {
             return $this->markOrphaned($group, $dryRun, 'class does not exist');
         }
 
         // Pass 1 — parent entity missing.
-        $existingIds = $this->fetchExistingIds($fqcn, $group->pluck('mediable_id')->unique());
+        $existingIds = $this->fetchExistingIds($modelClass, $group->pluck('mediable_id')->unique());
 
-        [$existing, $missing] = $group->partition(fn ($m) => isset($existingIds[$m->mediable_id]));
+        [$existing, $missing] = $group->partition(fn ($media) => isset($existingIds[$media->mediable_id]));
 
         $deleted = $this->markOrphaned($missing, $dryRun, 'parent entity does not exist');
 
-        if ($existing->isEmpty() || ! is_a($fqcn, InteractsWithMedia::class, true)) {
+        if ($existing->isEmpty() || ! is_a($modelClass, InteractsWithMedia::class, true)) {
             return $deleted;
         }
 
         // Pass 2 — collection not registered on the model.
-        $instance = new $fqcn;
+        $instance = new $modelClass;
 
         [$existing, $unknown] = $existing->partition(
-            fn ($m) => $instance->getMediaCollection($m->collection_name) !== null
+            fn ($media) => $instance->getMediaCollection($media->collection_name) !== null
         );
 
         $deleted += $this->markOrphaned($unknown, $dryRun, 'collection is not registered');
@@ -80,7 +80,7 @@ class MediaCleanCommand extends Command
 
             /** @var MediaCleaner $cleaner */
             $cleaner = app($cleanerClass);
-            $toDelete = $cleaner->orphaned($existing, $type, $fqcn);
+            $toDelete = $cleaner->orphaned($existing, $type, $modelClass);
 
             if ($toDelete->isNotEmpty()) {
                 $existing = $existing->diffUsing($toDelete, fn ($a, $b) => $a->id <=> $b->id);
@@ -91,11 +91,11 @@ class MediaCleanCommand extends Command
         return $deleted;
     }
 
-    private function fetchExistingIds(string $fqcn, Collection $ids): Collection
+    private function fetchExistingIds(string $modelClass, Collection $ids): Collection
     {
-        $query = in_array(SoftDeletes::class, class_uses_recursive($fqcn), true)
-            ? $fqcn::withTrashed()
-            : $fqcn::query();
+        $query = in_array(SoftDeletes::class, class_uses_recursive($modelClass), true)
+            ? $modelClass::withTrashed()
+            : $modelClass::query();
 
         return $query->whereIn('id', $ids)->pluck('id')->flip();
     }

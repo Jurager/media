@@ -149,6 +149,19 @@ $media->failedConversions();             // names with status=failed
 
 These methods read from the `media_conversions` table. Eager-load `media.conversions` when calling them in a loop to avoid N+1 queries.
 
+The `status` attribute on a `MediaConversion` is cast to the `Jurager\Media\Enums\ConversionStatus`
+enum (backed by the same string values stored in the database). Compare against the enum, or use the
+helper methods:
+
+```php
+use Jurager\Media\Enums\ConversionStatus;
+
+$conversion->status === ConversionStatus::Done; // enum comparison
+$conversion->isDone();                          // or the helper
+$conversion->isPending();
+$conversion->isFailed();
+```
+
 ## Pluggable converters
 
 Conversions are not limited to images. The package routes each file through a **converter** selected by MIME type. You can register converters for any file type.

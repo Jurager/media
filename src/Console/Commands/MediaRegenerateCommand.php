@@ -4,6 +4,7 @@ namespace Jurager\Media\Console\Commands;
 
 use Illuminate\Console\Command;
 use Jurager\Media\Conversions\Conversion;
+use Jurager\Media\Enums\ConversionStatus;
 use Jurager\Media\Jobs\PerformConversionsJob;
 use Jurager\Media\Models\Media;
 use Jurager\Media\Models\MediaConversion;
@@ -78,7 +79,7 @@ class MediaRegenerateCommand extends Command
                     $mediaConversionClass::updateOrCreate(
                         ['media_id' => $media->id, 'name' => $conversion->name],
                         [
-                            'status' => 'pending',
+                            'status' => ConversionStatus::Pending,
                             'disk' => $convDisk,
                             'error_message' => null,
                             'completed_at' => null,
@@ -88,10 +89,11 @@ class MediaRegenerateCommand extends Command
                 }
 
                 if ($sync) {
+                    // --sync forces the whole batch to run synchronously.
                     PerformConversionsJob::dispatchSync($media, $conversions);
                 } else {
-                    PerformConversionsJob::dispatch($media, $conversions)
-                        ->onQueue(config('media.queue', 'default'));
+                    // Honour each conversion's nonQueued()/onQueue() preferences.
+                    PerformConversionsJob::dispatchFor($media, $conversions);
                 }
 
                 $processed++;

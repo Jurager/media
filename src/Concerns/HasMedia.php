@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Jurager\Media\Conversions\Conversion;
+use Jurager\Media\Enums\ConversionStatus;
 use Jurager\Media\MediaCollection;
 use Jurager\Media\Models\Media;
 use Jurager\Media\Models\MediaConversion;
@@ -61,9 +62,7 @@ trait HasMedia
 
     public function media(): MorphMany
     {
-        $mediaClass = config('media.models.media', Media::class);
-
-        return $this->morphMany($mediaClass, 'mediable')->orderBy('order_column');
+        return $this->morphMany(config('media.models.media', Media::class), 'mediable')->orderBy('order_column');
     }
 
     public function addMedia(UploadedFile|string $file): FileAdder
@@ -153,7 +152,7 @@ trait HasMedia
 
         $mediaConversionClass = config('media.models.media_conversion', MediaConversion::class);
 
-        foreach ($original->conversions()->where('status', 'done')->get() as $conversion) {
+        foreach ($original->conversions()->where('status', ConversionStatus::Done)->get() as $conversion) {
             $conversionFileName = $original->getConversionFileName($conversion->name);
 
             Storage::disk($conversion->disk)->copy(
@@ -164,7 +163,7 @@ trait HasMedia
             $mediaConversionClass::create([
                 'media_id' => $copy->id,
                 'name' => $conversion->name,
-                'status' => 'done',
+                'status' => ConversionStatus::Done,
                 'disk' => $conversion->disk,
                 'extension' => $conversion->extension,
                 'size' => $conversion->size,
@@ -329,13 +328,23 @@ trait HasMedia
      */
     public function getRegisteredMediaCollections(): array
     {
-        if (! $this->mediaCollectionsRegistered) {
-            $this->mediaCollections = [];
-            $this->registerMediaCollections();
-            $this->mediaCollectionsRegistered = true;
-        }
+        $this->ensureMediaCollectionsRegistered();
 
         return $this->mediaCollections;
+    }
+
+    /**
+     * Lazily run registerMediaCollections() once, populating $mediaCollections.
+     */
+    protected function ensureMediaCollectionsRegistered(): void
+    {
+        if ($this->mediaCollectionsRegistered) {
+            return;
+        }
+
+        $this->mediaCollections = [];
+        $this->registerMediaCollections();
+        $this->mediaCollectionsRegistered = true;
     }
 
     /**
@@ -375,11 +384,7 @@ trait HasMedia
 
     public function getMediaCollection(string $name): ?MediaCollection
     {
-        if (! $this->mediaCollectionsRegistered) {
-            $this->mediaCollections = [];
-            $this->registerMediaCollections();
-            $this->mediaCollectionsRegistered = true;
-        }
+        $this->ensureMediaCollectionsRegistered();
 
         if (isset($this->mediaCollections[$name])) {
             return $this->mediaCollections[$name];

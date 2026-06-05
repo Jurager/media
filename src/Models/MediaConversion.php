@@ -4,6 +4,7 @@ namespace Jurager\Media\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Jurager\Media\Enums\ConversionStatus;
 
 class MediaConversion extends Model
 {
@@ -20,6 +21,7 @@ class MediaConversion extends Model
     ];
 
     protected $casts = [
+        'status' => ConversionStatus::class,
         'properties' => 'array',
         'size' => 'integer',
         'completed_at' => 'datetime',
@@ -32,22 +34,22 @@ class MediaConversion extends Model
 
     public function isPending(): bool
     {
-        return $this->status === 'pending';
+        return $this->status === ConversionStatus::Pending;
     }
 
     public function isProcessing(): bool
     {
-        return $this->status === 'processing';
+        return $this->status === ConversionStatus::Processing;
     }
 
     public function isDone(): bool
     {
-        return $this->status === 'done';
+        return $this->status === ConversionStatus::Done;
     }
 
     public function isFailed(): bool
     {
-        return $this->status === 'failed';
+        return $this->status === ConversionStatus::Failed;
     }
 
     public function getProperty(string $key, mixed $default = null): mixed

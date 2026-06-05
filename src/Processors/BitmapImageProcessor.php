@@ -11,10 +11,12 @@ class BitmapImageProcessor implements FileProcessor
     {
         $properties = $this->extractProperties($filePath);
 
-        if (config('media.strip_exif', true)) {
-            $normalized = $this->stripExif($filePath, $mimeType);
+        // GIF carries no EXIF, and re-encoding it — especially with the GD driver,
+        // which reads a single frame — would flatten animation. Never re-encode it.
+        $isGif = str_contains($mimeType, 'gif');
 
-            return new ProcessResult($normalized, $properties);
+        if (config('media.strip_exif', true) && ! $isGif) {
+            return new ProcessResult($this->stripExif($filePath, $mimeType), $properties);
         }
 
         return new ProcessResult($filePath, $properties);

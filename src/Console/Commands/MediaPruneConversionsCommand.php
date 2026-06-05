@@ -32,37 +32,37 @@ class MediaPruneConversionsCommand extends Command
             ->with('conversions')
             ->chunkById($chunk, function ($records) use ($mediaConversionClass, $generator, $dryRun, &$pruned): void {
                 foreach ($records as $media) {
-                    $fqcn = $this->resolveModelClass($media->mediable_type);
+                    $modelClass = $this->resolveModelClass($media->mediable_type);
 
-                    if (! class_exists($fqcn) || ! is_a($fqcn, InteractsWithMedia::class, true)) {
+                    if (! class_exists($modelClass) || ! is_a($modelClass, InteractsWithMedia::class, true)) {
                         continue;
                     }
 
-                    $instance = new $fqcn;
+                    $instance = new $modelClass;
                     $defined = array_map(
-                        static fn ($c) => $c->name,
+                        static fn ($conversion) => $conversion->name,
                         $instance->getConversionsForCollection($media->collection_name),
                     );
 
                     $stale = $media->conversions->filter(
-                        fn ($conv) => ! in_array($conv->name, $defined, true)
+                        fn ($conversion) => ! in_array($conversion->name, $defined, true)
                     );
 
-                    foreach ($stale as $conv) {
+                    foreach ($stale as $conversion) {
                         $basename = pathinfo($media->file_name, PATHINFO_FILENAME);
-                        $conversionFile = "{$basename}-{$conv->name}.{$conv->extension}";
+                        $conversionFile = "{$basename}-{$conversion->name}.{$conversion->extension}";
                         $conversionPath = $generator->getPathForConversions($media).$conversionFile;
 
                         $this->line(
                             $dryRun
-                            ? "  [dry-run] stale: {$media->mediable_type}#{$media->mediable_id} — {$conv->name}"
-                            : "  Pruning: {$media->mediable_type}#{$media->mediable_id} — {$conv->name}"
+                            ? "  [dry-run] stale: {$media->mediable_type}#{$media->mediable_id} — {$conversion->name}"
+                            : "  Pruning: {$media->mediable_type}#{$media->mediable_id} — {$conversion->name}"
                         );
 
                         if (! $dryRun) {
-                            $disk = $conv->disk ?? $media->conversionsDisk();
+                            $disk = $conversion->disk ?? $media->conversionsDisk();
                             Storage::disk($disk)->delete($conversionPath);
-                            $mediaConversionClass::where('id', $conv->id)->delete();
+                            $mediaConversionClass::where('id', $conversion->id)->delete();
                         }
 
                         $pruned++;

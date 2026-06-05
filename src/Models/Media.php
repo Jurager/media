@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Mail\Attachment;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Number;
+use Jurager\Media\Enums\ConversionStatus;
 use Jurager\Media\Events\MediaAdded;
 use Jurager\Media\Events\MediaDeleted;
 use Jurager\Media\Support\PathGenerator;
@@ -44,10 +46,7 @@ class Media extends Model implements Attachable
 
     public function conversions(): HasMany
     {
-        return $this->hasMany(
-            config('media.models.media_conversion', MediaConversion::class),
-            'media_id',
-        );
+        return $this->hasMany(config('media.models.media_conversion', MediaConversion::class), 'media_id');
     }
 
     /**
@@ -88,13 +87,13 @@ class Media extends Model implements Attachable
             return $this->buildUrl($this->disk, $this->getPath());
         }
 
-        $conv = $this->getConversionRecord($conversion);
+        $record = $this->getConversionRecord($conversion);
 
-        if (! $conv || ! $conv->isDone()) {
+        if (! $record || ! $record->isDone()) {
             return $this->buildUrl($this->disk, $this->getPath());
         }
 
-        return $this->buildUrl($conv->disk, $this->getPath($conversion));
+        return $this->buildUrl($record->disk, $this->getPath($conversion));
     }
 
     /**
@@ -117,8 +116,8 @@ class Media extends Model implements Attachable
         DateTimeInterface $expiration,
         array $options = [],
     ): string {
-        $conv = $this->getConversionRecord($conversion);
-        $disk = $conv?->disk ?? $this->conversionsDisk();
+        $record = $this->getConversionRecord($conversion);
+        $disk = $record?->disk ?? $this->conversionsDisk();
 
         return Storage::disk($disk)->temporaryUrl(
             $this->getPath($conversion),
@@ -176,7 +175,7 @@ class Media extends Model implements Attachable
     public function markConversionAsGenerated(string $name, string $ext, array $properties = [], int $size = 0): void
     {
         $data = [
-            'status' => 'done',
+            'status' => ConversionStatus::Done,
             'extension' => $ext,
             'completed_at' => now(),
         ];
@@ -227,7 +226,7 @@ class Media extends Model implements Attachable
      */
     public function pendingConversions(): array
     {
-        return $this->conversionNamesWithStatus('pending');
+        return $this->conversionNamesWithStatus(ConversionStatus::Pending);
     }
 
     /**
@@ -237,7 +236,7 @@ class Media extends Model implements Attachable
      */
     public function failedConversions(): array
     {
-        return $this->conversionNamesWithStatus('failed');
+        return $this->conversionNamesWithStatus(ConversionStatus::Failed);
     }
 
     /**
@@ -245,7 +244,7 @@ class Media extends Model implements Attachable
      *
      * @return string[]
      */
-    protected function conversionNamesWithStatus(string $status): array
+    protected function conversionNamesWithStatus(ConversionStatus $status): array
     {
         if ($this->relationLoaded('conversions')) {
             return $this->conversions->where('status', $status)->pluck('name')->all();
@@ -261,16 +260,7 @@ class Media extends Model implements Attachable
 
     public function humanReadableSize(): string
     {
-        $units = ['B', 'KB', 'MB', 'GB'];
-        $bytes = $this->size;
-        $i = 0;
-
-        while ($bytes >= 1024 && $i < count($units) - 1) {
-            $bytes /= 1024;
-            $i++;
-        }
-
-        return round($bytes, 2).' '.$units[$i];
+        return Number::fileSize($this->size, precision: 2);
     }
 
     /**

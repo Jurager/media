@@ -7,13 +7,15 @@ use ImagickException;
 use Jurager\Media\Contracts\Converter;
 use Jurager\Media\Conversions\Conversion;
 use Jurager\Media\Models\Media;
+use Jurager\Media\Support\ConverterRegistry;
 use RuntimeException;
 
 /**
  * Converts a PDF page to an image using the Imagick extension (requires Ghostscript).
  *
- * Rasterize the configured page at the configured DPI, then delegates to ImageConverter
- * for all image transformations (resize, format, quality).
+ * Rasterize the configured page at the configured DPI, then delegates to the image
+ * converter registered for image/* in media.converters for all image transformations
+ * (resize, format, quality) — so a custom image converter is honoured here too.
  *
  * Requirements:
  *   - ext-imagick
@@ -25,6 +27,8 @@ use RuntimeException;
  */
 class PdfConverter implements Converter
 {
+    public function __construct(private readonly ConverterRegistry $converters) {}
+
     /**
      * @throws ImagickException
      */
@@ -34,16 +38,28 @@ class PdfConverter implements Converter
             throw new RuntimeException('PdfConverter requires the Imagick PHP extension.');
         }
 
-        $dpi = (int) config('media.pdf_converter.resolution', 150);
-        $page = (int) config('media.pdf_converter.page', 0);
-
-        $rasterized = $this->rasterize($sourcePath, $dpi, $page);
+        // Rasterize the PDF page to a PNG, then run it through the configured image converter.
+        $rasterized = $this->rasterize(
+            $sourcePath,
+            (int) config('media.pdf_converter.resolution', 150),
+            (int) config('media.pdf_converter.page', 0),
+        );
 
         try {
-            return (new ImageConverter)->convert($rasterized, $conversion, $media);
+            return $this->imageConverter()->convert($rasterized, $conversion, $media);
         } finally {
             @unlink($rasterized);
         }
+    }
+
+    /**
+     * The converter that handles the rasterized PNG — honours a custom image/* converter
+     * registered in media.converters.
+     */
+    private function imageConverter(): Converter
+    {
+        return $this->converters->resolve('image/png')
+            ?? throw new RuntimeException('PdfConverter needs an image converter registered for [image/png].');
     }
 
     /**

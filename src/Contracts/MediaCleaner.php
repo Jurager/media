@@ -13,7 +13,7 @@ interface MediaCleaner
      *
      * @param  Collection  $candidates  Media records surviving the built-in passes.
      * @param  string  $type  The morph alias (e.g. 'product').
-     * @param  string  $fqcn  The fully-qualified model class name.
+     * @param  string  $modelClass  The fully-qualified model class name.
      */
-    public function orphaned(Collection $candidates, string $type, string $fqcn): Collection;
+    public function orphaned(Collection $candidates, string $type, string $modelClass): Collection;
 }

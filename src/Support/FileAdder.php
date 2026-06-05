@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Jurager\Media\Enums\ConversionStatus;
 use Jurager\Media\Jobs\PerformConversionsJob;
 use Jurager\Media\Models\Media;
 use Jurager\Media\Models\MediaConversion;
@@ -275,6 +276,12 @@ class FileAdder
             ->withOptions(['sink' => $tmpFile, 'timeout' => config('media.download_timeout', 60)])
             ->get($this->file);
 
+        // Re-validate the final host: a whitelisted domain could redirect to an
+        // internal address, and the HTTP client follows redirects by default.
+        if ($effectiveUri = $response->effectiveUri()) {
+            $this->guardAgainstSsrf((string) $effectiveUri);
+        }
+
         if (! $response->successful()) {
             throw new RuntimeException(
                 "Failed to download file from [{$this->file}]: HTTP {$response->status()}"
@@ -386,27 +393,13 @@ class FileAdder
             $mediaConversionClass::create([
                 'media_id' => $media->id,
                 'name' => $conversion->name,
-                'status' => 'pending',
+                'status' => ConversionStatus::Pending,
                 'disk' => $convDisk,
                 'extension' => $conversion->getFormat() ?: pathinfo($media->file_name, PATHINFO_EXTENSION),
             ]);
         }
 
-        $sync = array_values(array_filter($all, static fn ($c) => ! $c->isQueued()));
-        $async = array_values(array_filter($all, static fn ($c) => $c->isQueued()));
-
-        if (! empty($sync)) {
-            PerformConversionsJob::dispatchSync($media, $sync);
-        }
-
-        if (! empty($async)) {
-            collect($async)
-                ->groupBy(fn ($c) => $c->getQueue())
-                ->each(function ($group, string $queue) use ($media): void {
-                    PerformConversionsJob::dispatch($media, $group->values()->all())
-                        ->onQueue($queue);
-                });
-        }
+        PerformConversionsJob::dispatchFor($media, $all);
     }
 
     private const array BLOCKED_EXTENSIONS = [
