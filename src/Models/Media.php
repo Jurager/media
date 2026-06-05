@@ -64,6 +64,7 @@ class Media extends Model implements Attachable
      * Must run inside a database transaction: the row lock is only meaningful
      * while the surrounding transaction (which also inserts this record) is open,
      * which is what makes concurrent uploads race-free.
+     * 
      */
     public function assignNextOrderColumn(): void
     {
@@ -72,7 +73,8 @@ class Media extends Model implements Attachable
             ->where('mediable_id', $this->mediable_id)
             ->where('collection_name', $this->collection_name)
             ->lockForUpdate()
-            ->max('order_column');
+            ->pluck('order_column')
+            ->max();
 
         $this->order_column = (int) $max + 1;
     }
