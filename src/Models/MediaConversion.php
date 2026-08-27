@@ -6,6 +6,22 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Jurager\Media\Enums\ConversionStatus;
 
+/**
+ * @property int $id
+ * @property int $media_id
+ * @property string $name
+ * @property ConversionStatus $status
+ * @property string $disk
+ * @property string|null $extension
+ * @property int|null $size
+ * @property array|null $properties
+ * @property string|null $error_message
+ * @property \Illuminate\Support\Carbon|null $completed_at
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ *
+ * @property-read Media|null $media
+ */
 class MediaConversion extends Model
 {
     protected $fillable = [

@@ -16,6 +16,25 @@ use Jurager\Media\Events\MediaDeleted;
 use Jurager\Media\Support\PathGenerator;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
+/**
+ * @property int $id
+ * @property string $mediable_type
+ * @property int $mediable_id
+ * @property string $uuid
+ * @property string $collection_name
+ * @property string $name
+ * @property string $file_name
+ * @property string|null $mime_type
+ * @property string $disk
+ * @property int $size
+ * @property int|null $order_column
+ * @property string|null $hash
+ * @property array|null $properties
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ *
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, MediaConversion> $conversions
+ */
 class Media extends Model implements Attachable
 {
     protected $fillable = [
@@ -64,7 +83,7 @@ class Media extends Model implements Attachable
      * Must run inside a database transaction: the row lock is only meaningful
      * while the surrounding transaction (which also inserts this record) is open,
      * which is what makes concurrent uploads race-free.
-     * 
+     *
      */
     public function assignNextOrderColumn(): void
     {
