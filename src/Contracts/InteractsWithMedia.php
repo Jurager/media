@@ -11,6 +11,7 @@ use Jurager\Media\MediaCollection;
 use Jurager\Media\Models\Media;
 use Jurager\Media\Support\FileAdder;
 
+/** @property-read Collection<int, Media> $media set when the media() relation is loaded. */
 interface InteractsWithMedia
 {
     public function media(): MorphMany;
