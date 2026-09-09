@@ -236,6 +236,9 @@ php artisan media:clean --chunk=500
 
 Run this periodically (e.g. nightly cron) to prevent S3 cost accumulation from orphaned files.
 
+To decide whether a collection is legitimate, the command uses `getMediaCollectionNames()` — see [Dynamic collections](collections.md#dynamic-collections).
+If the model resolves some of its collections dynamically - without a `DynamicMediaCollectionResolver`, dynamic collections will look unregistered and get deleted.
+
 ### `media:regenerate`
 
 Regenerates conversions for existing media records. Works for any file type — images, PDFs, or custom converters. Useful after adding new conversion sizes, changing parameters, or registering a new converter for an existing collection.

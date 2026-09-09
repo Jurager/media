@@ -54,6 +54,8 @@ interface InteractsWithMedia
 
     public function addMediaCollection(string $name): MediaCollection;
 
+    public function addMediaCollectionResolver(DynamicMediaCollectionResolver $resolver): static;
+
     public function getConversionsForMedia(Media $media): array;
 
     public function getRegisteredMediaConversions(): array;
@@ -62,4 +64,7 @@ interface InteractsWithMedia
     public function getRegisteredMediaCollections(): array;
 
     public function getMediaCollection(string $name): ?MediaCollection;
+
+    /** @return list<string> */
+    public function getMediaCollectionNames(): array;
 }

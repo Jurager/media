@@ -12,6 +12,7 @@ use Jurager\Media\Models\Media;
 use Jurager\Media\Support\ConverterRegistry;
 use Jurager\Media\Support\FileAdder;
 use Jurager\Media\Support\FileProcessorRegistry;
+use Jurager\Media\Support\MediaCollectionResolverRegistry;
 use Jurager\Media\Support\PathGenerator;
 
 class MediaServiceProvider extends ServiceProvider
@@ -40,10 +41,11 @@ class MediaServiceProvider extends ServiceProvider
             return $registry;
         });
 
+        $this->app->singleton(MediaCollectionResolverRegistry::class);
+
         $this->app->bind(FileAdder::class);
 
-        // Bind to the configured subclass so every app(PathGenerator::class) call
-        // returns the right implementation without repeating config() lookups.
+        // Bind to the configured subclass so app(PathGenerator::class) resolves it without repeating config() lookups.
         $this->app->bind(PathGenerator::class, config('media.path_generator', PathGenerator::class));
     }
 

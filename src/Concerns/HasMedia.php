@@ -11,14 +11,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Jurager\Media\Contracts\DynamicMediaCollectionResolver;
 use Jurager\Media\Conversions\Conversion;
 use Jurager\Media\Enums\ConversionStatus;
 use Jurager\Media\MediaCollection;
 use Jurager\Media\Models\Media;
 use Jurager\Media\Models\MediaConversion;
 use Jurager\Media\Support\FileAdder;
+use Jurager\Media\Support\MediaCollectionResolverRegistry;
 use Jurager\Media\Support\PathGenerator;
-use Throwable;
 
 trait HasMedia
 {
@@ -28,35 +29,30 @@ trait HasMedia
     /** @var array<string, MediaCollection> */
     protected array $mediaCollections = [];
 
+    /** @var DynamicMediaCollectionResolver[] */
+    protected array $mediaCollectionResolvers = [];
+
     protected bool $mediaCollectionsRegistered = false;
 
     /** Cached result of registerMediaConversions() — null means not yet built. */
     protected ?array $registeredConversionsCache = null;
 
-    /**
-     * When true, all media is deleted automatically when the model is deleted.
-     * Set to false if you need custom cleanup logic.
-     */
+    /** When true, all media is deleted automatically when the model is deleted. */
     protected bool $deleteMediaOnDelete = true;
 
-    /**
-     * Automatically clean up media when the model is deleted.
-     * Called by Laravel during model boot via the boot{TraitName}() convention.
-     */
     public static function bootHasMedia(): void
     {
         static::deleting(static function (self $model): void {
+
             if (! $model->deleteMediaOnDelete) {
                 return;
             }
 
-            // For models using SoftDeletes, only clean up on permanent (force) deletion.
             if (in_array(SoftDeletes::class, class_uses_recursive($model), true) && ! $model->isForceDeleting()) {
                 return;
             }
 
-            $model->media()
-                ->chunkById(100, fn (Collection $chunk) => $chunk->each->delete());
+            $model->media()->chunkById(100, fn (Collection $chunk) => $chunk->each->delete());
         });
     }
 
@@ -70,31 +66,16 @@ trait HasMedia
         return $this->makeFileAdder()->setFile($file);
     }
 
-    /**
-     * Download a file from a remote URL and attach it as media.
-     *
-     * @param  array<string, string>  $headers
-     */
     public function addMediaFromUrl(string $url, array $headers = []): FileAdder
     {
         return $this->makeFileAdder()->setFileFromUrl($url, $headers);
     }
 
-    /**
-     * Decode a base64-encoded string and attach it as media.
-     * Accepts both raw base64 and data URIs (data:image/jpeg;base64,...).
-     */
     public function addMediaFromBase64(string $base64, string $mimeType = ''): FileAdder
     {
         return $this->makeFileAdder()->setFileFromBase64($base64, $mimeType);
     }
 
-    /**
-     * Copy a file from an existing storage disk and attach it as media.
-     * Useful for importing files already on S3 without downloading them locally first.
-     *
-     * Example: $product->addMediaFromDisk('exports/logo.png', 's3-archive')->toMediaCollection('images');
-     */
     public function addMediaFromDisk(string $path, string $disk): FileAdder
     {
         return $this->makeFileAdder()->setFileFromDisk($path, $disk);
@@ -105,13 +86,6 @@ trait HasMedia
         return app(FileAdder::class)->for($this);
     }
 
-    /**
-     * Copy media from another model using S3 server-side copy.
-     *
-     * @param  string|string[]|null  $collections  Collection name(s) to copy; null copies all.
-     *
-     * @throws Throwable
-     */
     public function copyMediaFrom(object $source, string|array|null $collections = null): void
     {
         if (! method_exists($source, 'media')) {
@@ -127,9 +101,6 @@ trait HasMedia
         $query->get()->each(fn (Media $media) => $this->copyMediaRecord($media));
     }
 
-    /**
-     * @throws Throwable
-     */
     protected function copyMediaRecord(Media $original): Media
     {
         /** @var PathGenerator $generator */
@@ -177,11 +148,6 @@ trait HasMedia
         return $copy;
     }
 
-    /**
-     * Eager-load the media relation to avoid N+1 queries.
-     *
-     * @param  string|string[]|null  $collections
-     */
     public function scopeWithMedia(Builder $query, string|array|null $collections = null): Builder
     {
         if ($collections === null) {
@@ -210,10 +176,6 @@ trait HasMedia
         return $this->getMedia($collection)->last();
     }
 
-    /**
-     * Return the URL for the first item in a collection.
-     * Falls back to the collection's useFallbackUrl() when no media exists.
-     */
     public function getFirstMediaUrl(string $collection = 'default', string $conversion = ''): string
     {
         $media = $this->getFirstMedia($collection);
@@ -235,13 +197,6 @@ trait HasMedia
         return $this->getMedia($collection)->isNotEmpty();
     }
 
-    /**
-     * Reorder media within a collection by providing Media IDs in the desired order.
-     *
-     * @param  array<int>  $orderedIds
-     *
-     * @throws Throwable
-     */
     public function reorderMedia(string $collection, array $orderedIds): void
     {
         $mediaClass = config('media.models.media', Media::class);
@@ -268,9 +223,6 @@ trait HasMedia
         return $this;
     }
 
-    /**
-     * Delete all media in a collection except the given item(s).
-     */
     public function clearMediaCollectionExcept(string $collection = 'default', Media|iterable $except = []): static
     {
         if ($except instanceof Media) {
@@ -308,6 +260,14 @@ trait HasMedia
         return $collection;
     }
 
+    /** Register a resolver for collections that can't be declared statically — call from registerMediaCollections(), alongside addMediaCollection(). */
+    public function addMediaCollectionResolver(DynamicMediaCollectionResolver $resolver): static
+    {
+        $this->mediaCollectionResolvers[] = $resolver;
+
+        return $this;
+    }
+
     /** @return Conversion[] */
     public function getRegisteredMediaConversions(): array
     {
@@ -320,12 +280,7 @@ trait HasMedia
         return $this->registeredConversionsCache;
     }
 
-    /**
-     * Return all statically registered MediaCollection instances.
-     * Dynamic collections (resolved via resolveDynamicMediaCollection) are not included.
-     *
-     * @return array<string, MediaCollection>
-     */
+    /** Statically registered collections only — dynamic ones are not included. */
     public function getRegisteredMediaCollections(): array
     {
         $this->ensureMediaCollectionsRegistered();
@@ -333,9 +288,6 @@ trait HasMedia
         return $this->mediaCollections;
     }
 
-    /**
-     * Lazily run registerMediaCollections() once, populating $mediaCollections.
-     */
     protected function ensureMediaCollectionsRegistered(): void
     {
         if ($this->mediaCollectionsRegistered) {
@@ -343,16 +295,34 @@ trait HasMedia
         }
 
         $this->mediaCollections = [];
+        $this->mediaCollectionResolvers = [];
         $this->registerMediaCollections();
         $this->mediaCollectionsRegistered = true;
     }
 
-    /**
-     * Return the conversions that apply to a specific Media item, filtered by both
-     * its collection and its MIME type (via performOnMimeTypes()).
-     *
-     * @return Conversion[]
-     */
+    /** Every collection name valid for this model, independent of any one instance's state — what a throwaway `new $modelClass` (media:clean) should ask instead of getMediaCollection(). */
+    public function getMediaCollectionNames(): array
+    {
+        $this->ensureMediaCollectionsRegistered();
+
+        $names = array_keys($this->mediaCollections);
+
+        foreach ($this->allMediaCollectionResolvers() as $resolver) {
+            $names = [...$names, ...$resolver->names($this)];
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    /** Resolvers added on this model plus every one registered globally via MediaCollectionResolverRegistry. */
+    protected function allMediaCollectionResolvers(): array
+    {
+        return [
+            ...$this->mediaCollectionResolvers,
+            ...app(MediaCollectionResolverRegistry::class)->all(),
+        ];
+    }
+
     public function getConversionsForMedia(Media $media): array
     {
         return array_values(array_filter(
@@ -399,18 +369,17 @@ trait HasMedia
         return $dynamic;
     }
 
-    /**
-     * Fallback hook for resolving a media collection that was not statically
-     * registered in registerMediaCollections().
-     *
-     * Models can override this to construct collections on demand — for example,
-     * a model with a dynamic attribute schema can derive a MediaCollection from
-     * an external definition (config, database, etc.).
-     *
-     * Returning null falls through to the default behavior (collection not found).
-     */
+    /** Fallback for a collection not statically registered — default asks every resolver in order; overriding replaces this entirely. */
     protected function resolveDynamicMediaCollection(string $name): ?MediaCollection
     {
+        foreach ($this->allMediaCollectionResolvers() as $resolver) {
+            $collection = $resolver->resolve($this, $name);
+
+            if ($collection !== null) {
+                return $collection;
+            }
+        }
+
         return null;
     }
 }

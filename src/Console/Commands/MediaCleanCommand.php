@@ -65,9 +65,10 @@ class MediaCleanCommand extends Command
 
         // Pass 2 — collection not registered on the model.
         $instance = new $modelClass;
+        $collectionNames = $instance->getMediaCollectionNames();
 
         [$existing, $unknown] = $existing->partition(
-            fn ($media) => $instance->getMediaCollection($media->collection_name) !== null
+            fn ($media) => in_array($media->collection_name, $collectionNames, true)
         );
 
         $deleted += $this->markOrphaned($unknown, $dryRun, 'collection is not registered');
