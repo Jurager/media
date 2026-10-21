@@ -159,10 +159,6 @@ trait HasMedia
 
     public function getMedia(string $collection = 'default'): Collection
     {
-        if (! $this->relationLoaded('media')) {
-            $this->load('media');
-        }
-
         return $this->media->where('collection_name', $collection)->values();
     }
 
