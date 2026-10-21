@@ -159,7 +159,9 @@ trait HasMedia
 
     public function getMedia(string $collection = 'default'): Collection
     {
-        return $this->media->where('collection_name', $collection)->values();
+        return $this->media
+            ->filter(static fn (Media $media) => $media->collection_name == $collection)
+            ->values();
     }
 
     public function getFirstMedia(string $collection = 'default'): ?Media

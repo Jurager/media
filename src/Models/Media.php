@@ -4,10 +4,12 @@ namespace Jurager\Media\Models;
 
 use DateTimeInterface;
 use Illuminate\Contracts\Mail\Attachable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Mail\Attachment;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Number;
 use Jurager\Media\Enums\ConversionStatus;
@@ -30,10 +32,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * @property int|null $order_column
  * @property string|null $hash
  * @property array|null $properties
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
- *
- * @property-read \Illuminate\Database\Eloquent\Collection<int, MediaConversion> $conversions
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read Collection<int, MediaConversion> $conversions
  */
 class Media extends Model implements Attachable
 {
@@ -83,7 +84,6 @@ class Media extends Model implements Attachable
      * Must run inside a database transaction: the row lock is only meaningful
      * while the surrounding transaction (which also inserts this record) is open,
      * which is what makes concurrent uploads race-free.
-     *
      */
     public function assignNextOrderColumn(): void
     {
@@ -261,17 +261,16 @@ class Media extends Model implements Attachable
     }
 
     /**
-     * Conversion names filtered by status, reusing the loaded relation when present.
+     * Conversion names filtered by status, preserving Eloquent relationship autoloading.
      *
      * @return string[]
      */
     protected function conversionNamesWithStatus(ConversionStatus $status): array
     {
-        if ($this->relationLoaded('conversions')) {
-            return $this->conversions->where('status', $status)->pluck('name')->all();
-        }
-
-        return $this->conversions()->where('status', $status)->pluck('name')->all();
+        return $this->conversions
+            ->filter(static fn (MediaConversion $conversion) => $conversion->status === $status)
+            ->pluck('name')
+            ->all();
     }
 
     public function isConversionPending(string $name): bool
@@ -300,13 +299,12 @@ class Media extends Model implements Attachable
         }
     }
 
+    /** Resolve through the relation so Eloquent can batch-load conversions for the whole collection. */
     protected function getConversionRecord(string $name): ?MediaConversion
     {
-        if ($this->relationLoaded('conversions')) {
-            return $this->conversions->firstWhere('name', $name);
-        }
-
-        return $this->conversions()->where('name', $name)->first();
+        return $this->conversions->first(
+            static fn (MediaConversion $conversion) => $conversion->name == $name,
+        );
     }
 
     protected function buildUrl(string $disk, string $path): string
