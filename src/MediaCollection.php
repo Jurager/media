@@ -37,7 +37,7 @@ class MediaCollection
     public function __construct(public readonly string $name) {}
 
     /**
-     * Allow only one file; any previous file is deleted before the new one is stored.
+     * Allow only one file; any previous file is deleted after the new upload succeeds.
      */
     public function singleFile(): static
     {

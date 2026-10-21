@@ -126,9 +126,9 @@ class FileAdder
         if ($limit >= 1) {
             $this->subject->media()
                 ->where('collection_name', $collection)
-                ->orderByDesc('order_column')
-                ->skip($limit)
+                ->reorder('order_column', 'desc')
                 ->get()
+                ->skip($limit)
                 ->each->delete();
 
             $this->subject->unsetRelation('media');
