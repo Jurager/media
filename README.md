@@ -1,4 +1,4 @@
-# jurager/media
+# Jurager/Media
 
 [![Latest Stable Version](https://poser.pugx.org/jurager/media/v/stable)](https://packagist.org/packages/jurager/media)
 [![Total Downloads](https://poser.pugx.org/jurager/media/downloads)](https://packagist.org/packages/jurager/media)
