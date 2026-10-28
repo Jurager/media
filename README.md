@@ -4,6 +4,7 @@
 [![Total Downloads](https://poser.pugx.org/jurager/media/downloads)](https://packagist.org/packages/jurager/media)
 [![PHP Version Require](https://poser.pugx.org/jurager/media/require/php)](https://packagist.org/packages/jurager/media)
 [![License](https://poser.pugx.org/jurager/media/license)](https://packagist.org/packages/jurager/media)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-support-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/jurager01)
 
 Polymorphic file and media management for Laravel. Attach images, PDFs, and any other files to any Eloquent model with S3 storage, automatic image conversions (thumbnails, WebP), EXIF stripping, and per-collection constraints.
 
