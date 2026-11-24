@@ -156,7 +156,7 @@ class Media extends Model implements Attachable
 
     public function stream(): StreamedResponse
     {
-        return Storage::disk($this->disk)->response($this->getPath());
+        return Storage::disk($this->disk)->response($this->getPath(), headers: $this->safeHeaders());
     }
 
     public function download(?string $downloadName = null): StreamedResponse
@@ -164,7 +164,18 @@ class Media extends Model implements Attachable
         return Storage::disk($this->disk)->download(
             $this->getPath(),
             $downloadName ?? $this->file_name,
+            $this->safeHeaders(),
         );
+    }
+
+    /**
+     * Headers that keep the browser from sniffing the file.
+     *
+     * @return array<string, string>
+     */
+    protected function safeHeaders(): array
+    {
+        return ['X-Content-Type-Options' => 'nosniff', 'Content-Security-Policy' => "sandbox; default-src 'none'"];
     }
 
     public function getPath(string $conversion = ''): string
